@@ -919,6 +919,17 @@ HVE_PLATFORMS = (
 )
 
 
+def _brand_svg(name):
+    """An EDC brand SVG from content/assets, for inlining: its maroon becomes
+    currentColor so the page's CSS can lighten it in dark mode (an <img>
+    cannot be recoloured, and maroon on a dark page all but vanishes)."""
+    path = os.path.join(CONTENT_DIR, "assets", name)
+    if not os.path.isfile(path):
+        return ""
+    with open(path, encoding="utf-8") as fh:
+        return fh.read().replace("#6b0739", "currentColor")
+
+
 def load_hve_content():
     path = os.path.join(CONTENT_DIR, "hve.toml")
     if not os.path.isfile(path):
@@ -1010,7 +1021,21 @@ def render_hve_page(c, release, downloads):
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{esc('name')} — Engineering Dynamics Company</title>
+<link rel="icon" href="assets/hve-cube.svg" type="image/svg+xml">
 <style>{SHARED_CSS}{DETAIL_CSS}
+:root {{ --accent: #6b0739; --brand: #6b0739; }}
+@media (prefers-color-scheme: dark) {{ :root {{ --accent: #e0a3b6; --brand: #e0a3b6; }}
+  a.btn:not(.ghost) {{ color: #2a0716; }} }}
+.topbar {{ display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+          padding: 1.1rem 0 .9rem; border-bottom: 1px solid var(--border); }}
+.topbar .lockup {{ color: var(--brand); display: block; line-height: 0; }}
+.topbar .lockup svg {{ height: 44px; width: auto; }}
+.topbar nav {{ display: flex; gap: 1.2rem; font-size: .95rem; flex-wrap: wrap; }}
+.cube {{ width: 100%; max-width: 230px; display: block; margin: 0 auto; }}
+@media (max-width: 720px) {{ .topbar .lockup svg {{ height: 36px; }}
+  .topbar nav {{ display: none; }} .cube {{ max-width: 140px; }} }}
+footer .mark {{ color: var(--brand); display: inline-block; line-height: 0; margin-bottom: .5rem; }}
+footer .mark svg {{ height: 28px; width: auto; }}
 .dl h3 {{ margin-bottom: .1rem; }}
 .dl .sha {{ font-size: .72rem; opacity: .7; overflow-wrap: anywhere; margin: 0 0 .7rem; }}
 .dl .sha code {{ background: none; padding: 0; }}
@@ -1019,13 +1044,21 @@ def render_hve_page(c, release, downloads):
 </head>
 <body>
 <main>
-<div class="support-hero">
-  <span class="badge">{esc('badge')}</span>
-  <h1>{esc('name')}</h1>
-  <p class="tagline">{esc('tagline')}</p>
-  {paragraphs(c.get('pitch', ''))}
-  <div class="actions"><a class="btn" href="#download">Download</a>
-  <a class="btn ghost" href="#licensing">Licensing</a></div>
+<header class="topbar">
+  <a class="lockup" href="https://www.edccorp.com">{_brand_svg("edc-lockup.svg")}</a>
+  <nav><a href="#download">Download</a><a href="#licensing">Licensing</a>
+  <a href="#support">Support</a><a href="{PAGES_BASE}/">EDC Software</a></nav>
+</header>
+<div class="phero">
+  <div>
+    <span class="badge">{esc('badge')}</span>
+    <h1>{esc('name')}</h1>
+    <p class="tagline">{esc('tagline')}</p>
+    {paragraphs(c.get('pitch', ''))}
+    <div class="actions"><a class="btn" href="#download">Download</a>
+    <a class="btn ghost" href="#licensing">Licensing</a></div>
+  </div>
+  <div><img class="cube" src="assets/hve-cube.svg" alt="HVE"></div>
 </div>
 
 <h2 id="download">Download</h2>
@@ -1064,6 +1097,7 @@ Visit <a href="https://www.edccorp.com">edccorp.com</a> or contact EDC support f
 licensing, training and assistance.</p>
 
 <footer>
+<a class="mark" href="https://www.edccorp.com">{_brand_svg("edc-mark.svg")}</a><br>
 © Engineering Dynamics Company. Blender® is a registered trademark of the
 Blender Foundation.
 </footer>

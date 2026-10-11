@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="30 333.2 123.2 63.8" role="img" aria-label="Engineering Dynamics Company">
+<title>Engineering Dynamics Company</title>
+<ellipse
+style="opacity:1;fill:none;fill-opacity:0.50196078;stroke:#6b0739;stroke-width:3.5;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;paint-order:markers fill stroke"
+cx="71.987457"
+cy="365.10715"
+rx="39.352459"
+ry="28.169638" />
+<ellipse
+style="opacity:1;fill:none;fill-opacity:0.50196078;stroke:#6b0739;stroke-width:3.5;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;paint-order:markers fill stroke"
+cx="110.87708"
+cy="365.10715"
+rx="39.352459"
+ry="28.169638" />
+<path
+d="m 64.211545,355.74286 c 0,0 -4.50322,-3.9915 -9.65273,-3.76684 -6.05757,0.26423 -12.9157,5.02234 -13.01227,13.44831 -0.0985,8.59079 6.98519,12.49267 13.01227,12.80887 4.90967,0.25748 9.65273,-3.12743 9.65273,-3.12743"
+style="fill:none;stroke:#6b0739;stroke-width:3.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+<path
+d="m 41.657585,365.10719 h 14.4434"
+style="fill:none;stroke:#6b0739;stroke-width:3.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+<path
+d="m 139.73667,355.74286 c 0,0 -4.50322,-3.9915 -9.65275,-3.76684 -6.05755,0.26423 -12.91568,5.02234 -13.01227,13.44831 -0.0985,8.59079 6.98521,12.49267 13.01227,12.80887 4.90969,0.25748 9.65275,-3.12743 9.65275,-3.12743"
+style="fill:none;stroke:#6b0739;stroke-width:3.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+<path
+d="m 89.752015,378.23814 c 6.05757,-0.26424 12.915715,-5.02235 13.012285,-13.44833 0.0985,-8.59077 -6.985205,-12.49265 -13.012285,-12.80885 -4.90966,-0.25748 -9.65272,3.12743 -9.65272,3.12743 v 0.31736 19.20421 c 0,0 4.50321,3.83284 9.65272,3.60818 z"
+style="fill:none;stroke:#6b0739;stroke-width:3.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+</svg>

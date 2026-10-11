@@ -187,3 +187,21 @@ def test_a_script_may_send_the_key_as_a_bearer_header(gw):
     assert r.status_code == 200 and r.content == b"file-bytes"
     r = gw.get(f"/download/{EXE}", headers={"authorization": "Bearer edc_wrong", **IP})
     assert r.status_code == 401
+
+
+def test_the_page_carries_edc_and_hve_branding():
+    page = build_index.render_hve_page(content(), None, {})
+    # The EDC name lockup and mark are inlined in currentColor, so dark mode
+    # can lighten them; maroon on a dark page all but disappears.
+    assert page.count("<svg") == 2 and "ENGINEERING" in page
+    assert "#6b0739\"" not in page.split("<style>", 1)[1].split("</style>", 1)[1]
+    assert 'src="assets/hve-cube.svg"' in page and 'rel="icon" href="assets/hve-cube.svg"' in page
+
+
+@pytest.mark.parametrize("name", ["edc-mark.svg", "edc-lockup.svg", "hve-cube.svg"])
+def test_brand_assets_are_valid_svg_the_gateway_serves(name):
+    import xml.dom.minidom
+    path = ROOT / "content" / "assets" / name
+    doc = xml.dom.minidom.parse(str(path))
+    assert doc.documentElement.getAttribute("viewBox")
+    assert "inkscape" not in path.read_text() and "sodipodi" not in path.read_text()
