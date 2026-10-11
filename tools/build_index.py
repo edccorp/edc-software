@@ -895,6 +895,203 @@ def render_support_page(c):
 """
 
 
+# ---------------------------------------------------------------- HVE 2027
+#
+# hve.edccorp.com: HVE's own landing page and downloads. The gateway serves it
+# as "/" for that host (and at /hve on any host). The release comes from
+# edccorp/hve-next: the newest PUBLISHED one, never a draft -- the release
+# workflow ends with a draft precisely so nothing is announced before someone
+# publishes it, and this page is an announcement.
+
+HVE_REPO = "edccorp/hve-next"
+#: Absolute for the same reason as RECOVER_URL: Pages serves these files too.
+HVE_BASE = "https://hve.edccorp.com"
+OFFLINE_URL = f"{HVE_BASE}/offline"
+
+#: Which download a release asset is, by its name. Order is display order.
+HVE_PLATFORMS = (
+    ("windows", "Windows", "64-bit installer",
+     lambda n: n.lower().endswith("-setup.exe")),
+    ("linux", "Linux", "64-bit .tar.gz",
+     lambda n: n.lower().endswith(".tar.gz") and "linux" in n.lower()),
+    ("macos", "macOS", "disk image",
+     lambda n: n.lower().endswith(".dmg")),
+)
+
+
+def load_hve_content():
+    path = os.path.join(CONTENT_DIR, "hve.toml")
+    if not os.path.isfile(path):
+        return None
+    with open(path, "rb") as fh:
+        return tomllib.load(fh)
+
+
+def hve_downloads(release):
+    """{filename: {...}} for the release's downloadable files: what the page
+    lists and what the gateway may stream. Empty without a release."""
+    out = {}
+    if not release:
+        return out
+    for asset in release.get("assets", []):
+        name = asset.get("name", "")
+        platform = next((p[0] for p in HVE_PLATFORMS if p[3](name)), None)
+        if platform is None and name != "SHA256SUMS.txt":
+            continue
+        digest = asset.get("digest") or ""
+        out[name] = {
+            "repo": HVE_REPO,
+            "asset_id": asset.get("id"),
+            "size": asset.get("size", 0),
+            "platform": platform or "checksums",
+            "sha256": digest.split(":", 1)[1] if digest.startswith("sha256:") else "",
+        }
+    return out
+
+
+def _mb(size):
+    return f"{size / 1e6:.0f} MB" if size >= 1e6 else f"{max(size, 1) / 1e3:.0f} KB"
+
+
+def render_hve_page(c, release, downloads):
+    """HVE's landing page from content/hve.toml and its newest published
+    release. With no release it still renders, saying downloads open then."""
+    def esc(key, default=""):
+        return html.escape(str(c.get(key, default)))
+
+    def paragraphs(text):
+        return "\n".join(f"<p>{html.escape(p.strip())}</p>"
+                         for p in text.split("\n\n") if p.strip())
+
+    version = (release or {}).get("tag_name", "").lstrip("v")
+    published = ((release or {}).get("published_at") or "")[:10]
+    cards = []
+    for key, label, kind, _match in HVE_PLATFORMS:
+        files = [(n, d) for n, d in downloads.items() if d["platform"] == key]
+        if files:
+            name, d = files[0]
+            sha = (f'<p class="sha">SHA-256 <code>{html.escape(d["sha256"])}</code></p>'
+                   if d["sha256"] else "")
+            action = (f'<a class="btn" href="{HVE_BASE}/download/{html.escape(name)}">'
+                      f'Download</a>')
+            meta = f"{html.escape(kind)} &middot; {_mb(d['size'])}"
+        else:
+            sha = ""
+            action = '<span class="soon">Not available yet</span>'
+            meta = html.escape(kind)
+        cards.append(f"""<div class="card dl">
+  <h3>{label}</h3>
+  <div class="meta"><span>{meta}</span></div>
+  {sha}
+  <div class="actions">{action}</div>
+</div>""")
+    sums = downloads.get("SHA256SUMS.txt")
+    sums_link = (f' &middot; <a href="{HVE_BASE}/download/SHA256SUMS.txt">SHA256SUMS.txt</a>'
+                 if sums else "")
+    if release:
+        status = (f'<p><strong>Version {html.escape(version)}</strong>'
+                  f'{" &middot; released " + html.escape(published) if published else ""}'
+                  f'{sums_link}</p>')
+        notes = render_notes(release.get("body") or "")
+        whats_new = f'<h2>What’s new</h2>\n<div class="notes">{notes}</div>' if notes else ""
+    else:
+        status = ('<div class="notice"><strong>Downloads open at release.</strong> '
+                  'HVE 2027 is in testing; this page will offer it here as soon as it is '
+                  'released.</div>')
+        whats_new = ""
+
+    features = "\n".join(f"<li>{html.escape(f)}</li>" for f in c.get("features", []))
+    requirements = "\n".join(f"<li>{html.escape(r)}</li>" for r in c.get("requirements", []))
+    faq = "\n".join(f"<h3>{html.escape(q.get('q', ''))}</h3>\n{paragraphs(q.get('a', ''))}"
+                    for q in c.get("faq", []))
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{esc('name')} — Engineering Dynamics Company</title>
+<style>{SHARED_CSS}{DETAIL_CSS}
+.dl h3 {{ margin-bottom: .1rem; }}
+.dl .sha {{ font-size: .72rem; opacity: .7; overflow-wrap: anywhere; margin: 0 0 .7rem; }}
+.dl .sha code {{ background: none; padding: 0; }}
+.soon {{ opacity: .65; font-style: italic; }}
+</style>
+</head>
+<body>
+<main>
+<div class="support-hero">
+  <span class="badge">{esc('badge')}</span>
+  <h1>{esc('name')}</h1>
+  <p class="tagline">{esc('tagline')}</p>
+  {paragraphs(c.get('pitch', ''))}
+  <div class="actions"><a class="btn" href="#download">Download</a>
+  <a class="btn ghost" href="#licensing">Licensing</a></div>
+</div>
+
+<h2 id="download">Download</h2>
+{status}
+<div class="grid">
+{chr(10).join(cards)}
+</div>
+<p>Downloading needs your EDC Software key, the same one that installs the
+EDC Blender tools. Lost it? <a href="{RECOVER_URL}">Have it emailed to you</a>.</p>
+
+{whats_new}
+
+<h2>Capabilities</h2>
+<ul class="checks">
+{features}
+</ul>
+
+<h2 id="licensing">Licensing</h2>
+{paragraphs(c.get('licensing', ''))}
+<p><a href="{OFFLINE_URL}">Activate a computer without internet, or release one you no
+longer have →</a></p>
+
+<h2>Requirements</h2>
+<ul>
+{requirements}
+</ul>
+
+<h2>Questions</h2>
+<div class="faq">
+{faq}
+</div>
+
+<h2 id="support">Support</h2>
+<p>HVE is developed and supported by <strong>Engineering Dynamics Company</strong>.
+Visit <a href="https://www.edccorp.com">edccorp.com</a> or contact EDC support for
+licensing, training and assistance.</p>
+
+<footer>
+© Engineering Dynamics Company. Blender® is a registered trademark of the
+Blender Foundation.
+</footer>
+</main>
+</body>
+</html>
+"""
+
+
+def write_hve_site(out_dir):
+    """hve.html and hve-downloads.json. The page is written with or without a
+    release; the JSON is what the gateway's /download route may stream."""
+    c = load_hve_content()
+    if c is None:
+        return False
+    release = _newest_release(HVE_REPO)
+    downloads = hve_downloads(release)
+    with open(os.path.join(out_dir, "hve.html"), "w", encoding="utf-8") as fh:
+        fh.write(render_hve_page(c, release, downloads))
+    with open(os.path.join(out_dir, "hve-downloads.json"), "w", encoding="utf-8") as fh:
+        json.dump(downloads, fh, indent=2)
+        fh.write("\n")
+    print(f"Wrote {out_dir}/hve.html "
+          + (f"({release.get('tag_name')}, {len(downloads)} file(s))" if release
+             else "(no published release: downloads open at release)"))
+    return True
+
+
 def main():
     out_dir = sys.argv[1] if len(sys.argv) > 1 else "site"
     os.makedirs(out_dir, exist_ok=True)
@@ -926,6 +1123,7 @@ def main():
     if support:
         with open(os.path.join(pages_dir, "support.html"), "w", encoding="utf-8") as fh:
             fh.write(render_support_page(support))
+    write_hve_site(out_dir)
     assets_src = os.path.join(CONTENT_DIR, "assets")
     if os.path.isdir(assets_src):
         shutil.copytree(assets_src, os.path.join(out_dir, "assets"), dirs_exist_ok=True)

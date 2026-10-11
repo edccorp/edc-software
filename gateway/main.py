@@ -1771,11 +1771,31 @@ async def healthz():
     return body
 
 
+#: Hosts whose "/" is HVE's page rather than the extensions announcement
+#: (edc-software and hve-next docs/DISTRIBUTION.md, "Hostnames": one gateway,
+#: several names, the landing page picked by Host).
+HVE_HOSTS = {h.strip().lower() for h in
+             os.environ.get("HVE_HOSTS", "hve.edccorp.com").split(",") if h.strip()}
+
+
+def _is_hve_host(request: Request) -> bool:
+    return request.headers.get("host", "").split(":")[0].lower() in HVE_HOSTS
+
+
 @app.get("/")
-async def landing():
+async def landing(request: Request):
     # The launch announcement is the homepage; the product-grid catalog lives
-    # at /software.
+    # at /software. On hve.edccorp.com the homepage is HVE's.
+    if _is_hve_host(request):
+        return await hve_page()
     page = await _origin_get("assets/launch.html")
+    return Response(content=page, media_type="text/html")
+
+
+@app.get("/hve")
+async def hve_page():
+    """HVE's landing page and downloads, on any host (hve.edccorp.com's "/")."""
+    page = await _origin_get("hve.html")
     return Response(content=page, media_type="text/html")
 
 
@@ -2007,9 +2027,16 @@ async def package(filename: str, request: Request):
         )
         raise HTTPException(status_code=403, detail=detail)
 
+    return await _stream_release_asset(entry["repo"], entry["asset_id"], filename,
+                                       customer["name"], product_id, "application/zip")
+
+
+async def _stream_release_asset(repo: str, asset_id, filename: str, who: str,
+                                product_id: str, media_type: str) -> StreamingResponse:
+    """Stream one private GitHub release asset to a customer, and note it."""
     # The API asset endpoint works for private repos; the public
     # browser_download_url does not.
-    asset_url = f"https://api.github.com/repos/{entry['repo']}/releases/assets/{entry['asset_id']}"
+    asset_url = f"https://api.github.com/repos/{repo}/releases/assets/{asset_id}"
     headers = {"Accept": "application/octet-stream"}
     if GH_TOKEN:
         headers["Authorization"] = f"Bearer {GH_TOKEN}"
@@ -2023,8 +2050,8 @@ async def package(filename: str, request: Request):
         await client.aclose()
         raise HTTPException(status_code=502, detail=f"upstream returned {upstream.status_code}")
 
-    print(f"[gateway] {filename} download by {customer['name']}")
-    _record_download(customer["name"], filename, product_id)
+    print(f"[gateway] {filename} download by {who}")
+    _record_download(who, filename, product_id)
 
     async def _close():
         await upstream.aclose()
@@ -2035,7 +2062,7 @@ async def package(filename: str, request: Request):
 
     return StreamingResponse(
         upstream.aiter_bytes(),
-        media_type="application/zip",
+        media_type=media_type,
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
             **(
@@ -2046,3 +2073,78 @@ async def package(filename: str, request: Request):
         },
         background=BackgroundTask(_close),
     )
+
+
+# ------------------------------------------------------------- HVE downloads
+#
+# hve.edccorp.com's download buttons. A browser cannot send the Bearer header
+# Blender sends, so a GET shows a one-field form for the EDC Software key and
+# the POST streams the file; a script may still send the header. Any key on
+# file may download the program (hve-next docs/DISTRIBUTION.md, "What
+# ships"): running it is what the license gates, not having it. Only files
+# the published page lists (hve-downloads.json, written from the newest
+# PUBLISHED hve-next release) can be fetched, so a draft never leaks.
+
+def _download_html(filename: str, message: str = "", bad: bool = False) -> str:
+    note = (f'<p class="{"bad" if bad else "muted"}">{html.escape(message)}</p>'
+            if message else "")
+    safe = html.escape(filename)
+    return _offline_html(f"""<div class="card">
+<h1>Download {safe}</h1>
+<p class="muted">Enter your EDC Software key: the one that activates HVE and installs the
+EDC Blender tools.</p>
+{note}
+<form method="post" action="/download/{safe}">
+<label for="secret">Your EDC Software key</label>
+<input type="password" id="secret" name="secret" required autocomplete="off" autofocus>
+<button>Download</button>
+</form>
+<p class="muted">Lost your key? <a href="https://extensions.edccorp.com/recover">Have it
+emailed to you</a>. <a href="/">Back to HVE</a></p>
+</div>""").replace("<title>HVE license", "<title>HVE download")
+
+
+async def _hve_download_entry(filename: str) -> dict:
+    if "/" in filename or ".." in filename:
+        raise HTTPException(status_code=404)
+    try:
+        downloads = json.loads(await _origin_get("hve-downloads.json"))
+    except Exception:
+        downloads = {}
+    entry = downloads.get(filename) if isinstance(downloads, dict) else None
+    if not isinstance(entry, dict) or not entry.get("asset_id"):
+        raise HTTPException(status_code=404, detail=f"no HVE download named {filename}")
+    return entry
+
+
+@app.get("/download/{filename}")
+async def hve_download_form(filename: str, request: Request):
+    entry = await _hve_download_entry(filename)
+    if request.headers.get("authorization", "").lower().startswith("bearer "):
+        return await _hve_download(filename, entry, request,
+                                   request.headers["authorization"][7:].strip())
+    return HTMLResponse(_download_html(filename))
+
+
+@app.post("/download/{filename}")
+async def hve_download_post(filename: str, request: Request):
+    from urllib.parse import parse_qs
+    entry = await _hve_download_entry(filename)
+    form = {k: v[0] for k, v in parse_qs((await request.body()).decode("utf-8", "replace"),
+                                         keep_blank_values=True).items()}
+    return await _hve_download(filename, entry, request, form.get("secret", "").strip())
+
+
+async def _hve_download(filename: str, entry: dict, request: Request, secret: str):
+    address = _client_address(request)
+    if _over_limit("fail", address, record=False):
+        return HTMLResponse(_download_html(filename, "Too many attempts from this network. "
+                                           "Wait a few minutes and try again.", bad=True), 429)
+    raw = (await _customer_tokens()).get(secret) if secret else None
+    if raw is None:
+        _over_limit("fail", address)
+        return HTMLResponse(_download_html(filename, "That key was not recognised. Check it "
+                                           "and try again.", bad=True), 401)
+    who = _entitlements(raw)["name"]
+    return await _stream_release_asset(entry["repo"], entry["asset_id"], filename, who,
+                                       "hve", "application/octet-stream")

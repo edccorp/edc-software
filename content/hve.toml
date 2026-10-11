@@ -1,0 +1,55 @@
+# HVE's download page: hve.edccorp.com (and /hve on extensions.edccorp.com).
+# Rendered by tools/build_index.py (render_hve_page) with the newest PUBLISHED
+# release of edccorp/hve-next; a draft release is never shown. With no
+# published release the page says downloads open at release, so this file can
+# be live before HVE ships.
+
+name = "HVE 2027"
+badge = "Preview"
+tagline = "Human · Vehicle · Environment simulation, rebuilt for today's computers."
+pitch = """HVE 2027 is the next major version of HVE, the physics-based simulation environment from Engineering Dynamics Company for reconstructing and simulating vehicle crashes and occupant motion. It runs the same EDC engines classic HVE runs, from the same physics source, in a new 3-D interface.
+
+It installs beside classic HVE rather than over it, so you can run both while you move your work across."""
+
+# Shown under "Capabilities", a check mark each.
+features = [
+  "SIMON 3-D vehicle simulation, with DyMESH collision",
+  "EDCRASH damage-based reconstruction",
+  "EDSMAC and EDSMAC4 collision simulation",
+  "EDSVS, EDVSM, EDVTS and EDVDS vehicle and articulated-vehicle models",
+  "EDHIS and GATB occupant and pedestrian simulation",
+  "EDGEN, and a single-track model for motorcycles",
+  "Opens classic HVE cases (File → Import)",
+  "Graphs, report pages and timestep tables from every run",
+  "Animation recording up to 1000 fps, including slow motion",
+  "glTF export and a live link to Blender",
+]
+
+# Shown under "Licensing". Paragraphs separated by a blank line.
+licensing = """HVE is licensed per computer. Activate it once from Help → License with your EDC Software key; it refreshes itself online, and keeps working for 60 days without an internet connection. A computer that never connects can be activated with a license file from the offline page.
+
+Each engine is licensed separately, and so is the EDC vehicle database. Your license says which you have, and HVE tells you plainly when something is not included. Opening, viewing and printing cases is never licensed, so your work stays readable."""
+
+# Shown under "Requirements", one bullet each.
+requirements = [
+  "Windows 10 or 11, 64-bit; or 64-bit Linux",
+  "A graphics card with OpenGL 3.3",
+  "An internet connection to activate (or the offline page)",
+  "macOS: coming later",
+]
+
+[[faq]]
+q = "Does it replace classic HVE?"
+a = "Not yet. HVE 2027 installs in its own folder, uses its own .hvc case format, and never takes over the .hve file type, so classic HVE keeps working beside it. Open a classic case in HVE 2027 with File → Import."
+
+[[faq]]
+q = "How do I get a key?"
+a = "Existing customers already have an EDC Software key. If you do not, or have lost yours, use the recovery link under Download, or contact Engineering Dynamics Company."
+
+[[faq]]
+q = "Where is the EDC vehicle database?"
+a = "It is a licensed product, so it is not in the installer. Customers licensed for it receive it separately."
+
+[[faq]]
+q = "Can I check the download?"
+a = "Yes. Every release lists the SHA-256 of each of its files, beside the downloads."

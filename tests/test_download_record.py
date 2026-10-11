@@ -120,21 +120,30 @@ def test_repeated_downloads_collapse_to_one_field():
 
 
 def _package_handler():
-    return GATEWAY.split('@app.get("/packages/{filename}")', 1)[1]
+    return GATEWAY.split('@app.get("/packages/{filename}")', 1)[1].split(
+        "async def _stream_release_asset(", 1)[0]
+
+
+def _stream_helper():
+    """The stream-and-note half every download route shares (/packages and
+    hve.edccorp.com's /download)."""
+    return GATEWAY.split("async def _stream_release_asset(", 1)[1].split("\n\n\n", 1)[0]
 
 
 def test_the_stamp_is_taken_only_after_entitlement_is_checked():
     """A refused download is not a download. Recording before the 403 would
     log an attempt as a fetch."""
     body = _package_handler()
-    assert body.index("_entitlement_state") < body.index("_record_download(")
+    # The stamp is taken inside the stream helper, so: checked, then streamed.
+    assert body.index("_entitlement_state") < body.index("_stream_release_asset(")
+    assert "_record_download(" in _stream_helper()
 
 
 def test_the_write_happens_after_the_bytes_not_before():
     """A download must not wait on a commit, nor fail because one failed."""
-    body = _package_handler()
+    body = _stream_helper()
     assert "await _flush_downloads()" in body
-    assert body.index("StreamingResponse") > body.index("_record_download(")
+    assert body.index("return StreamingResponse") > body.index("_record_download(")
     close = body.split("async def _close():", 1)[1].split("return StreamingResponse", 1)[0]
     assert "upstream.aclose()" in close and "_flush_downloads()" in close
 
@@ -246,8 +255,9 @@ def test_a_package_with_no_product_id_still_records_the_latest():
 
 
 def test_the_handler_passes_the_product_it_checked():
-    body = _package_handler()
-    assert '_record_download(customer["name"], filename, product_id)' in body
+    assert "_record_download(who, filename, product_id)" in _stream_helper()
+    call = _package_handler().split("_stream_release_asset(", 1)[1].split(")", 1)[0]
+    assert 'customer["name"], product_id' in call
 
 
 def test_show_lists_each_product_download_newest_first(monkeypatch, capsys):
