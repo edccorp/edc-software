@@ -19,7 +19,7 @@ Blender ──repository secret──▶ extensions.edccorp.com (this gateway on
 ## Deploy on Railway (one time)
 
 1. **Create the service**: Railway → New Project → Deploy from GitHub repo →
-   `edccorp/blender-extensions`. Set the service **root directory** to
+   `edccorp/edc-software`. Set the service **root directory** to
    `gateway/` (Settings → Source). Railway detects Python and uses
    `railway.json` for the start command.
 2. **Set environment variables** (service → Variables):
@@ -47,7 +47,7 @@ Blender ──repository secret──▶ extensions.edccorp.com (this gateway on
    `extensions.edccorp.com`. Railway shows a CNAME target; update the DNS
    record for `extensions` (currently pointing at `edccorp.github.io`) to
    that target. Remove the custom domain from the GitHub Pages settings of
-   this repo (Pages keeps serving at `edccorp.github.io/blender-extensions`
+   this repo (Pages keeps serving at `edccorp.github.io/edc-software`
    as the gateway's origin).
 4. **Flip the publisher to gateway mode**: in this repo's publish workflow,
    set `MIRROR_ZIPS: "0"` on the build step (zips stop being copied to the

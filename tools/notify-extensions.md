@@ -22,7 +22,7 @@ Have each product repo ping this repo the moment it publishes a release.
 
 1. Create a fine-grained PAT (github.com → Settings → Developer settings →
    Fine-grained tokens) with **Contents: read and write** on
-   **`edccorp/blender-extensions`** only. Call it e.g. `EXTENSIONS_DISPATCH`.
+   **`edccorp/edc-software`** only. Call it e.g. `EXTENSIONS_DISPATCH`.
 2. Add it as an Actions secret named `EXTENSIONS_DISPATCH_TOKEN` in each
    product repo (CamMatch, EDCHVEToolkit, EDCPointCloudToolkit,
    EDCReconToolkit) — Settings → Secrets and variables → Actions.
@@ -34,7 +34,7 @@ Have each product repo ping this repo the moment it publishes a release.
      env:
        GH_TOKEN: ${{ secrets.EXTENSIONS_DISPATCH_TOKEN }}
      run: |
-       gh api repos/edccorp/blender-extensions/dispatches \
+       gh api repos/edccorp/edc-software/dispatches \
          -f event_type=product-release
    ```
 

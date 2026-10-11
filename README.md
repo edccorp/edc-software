@@ -77,5 +77,5 @@ this repo from the product's release workflow.
   `GITHUB_TOKEN` to avoid API rate limits), then open `/tmp/site/index.html`.
 - The site is served at the custom domain `extensions.edccorp.com`
   (configured in the Pages settings); the underlying
-  `edccorp.github.io/blender-extensions` URL redirects to it. If the
+  `edccorp.github.io/edc-software` URL redirects to it. If the
   domain ever changes, update `PAGES_BASE` in `tools/build_index.py`.

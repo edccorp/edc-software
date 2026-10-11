@@ -2,7 +2,7 @@ name: Publish extensions index
 
 # Rebuilds index.json from the latest GitHub release of every EDC product
 # and publishes it (plus a landing page) to GitHub Pages at
-# https://edccorp.github.io/blender-extensions/index.json
+# https://edccorp.github.io/edc-software/index.json
 #
 # Runs on a schedule so new product releases are picked up automatically,
 # and can be run manually (Actions -> Publish extensions index -> Run

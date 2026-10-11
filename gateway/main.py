@@ -49,7 +49,7 @@ Environment variables:
                      provisions the purchase even if the buyer never
                      reaches /welcome
     ORIGIN_BASE      Pages origin serving index.json/packages.json
-                     (default https://edccorp.github.io/blender-extensions)
+                     (default https://edccorp.github.io/edc-software)
     CACHE_TTL        origin cache seconds (default 300)
 """
 
@@ -71,7 +71,7 @@ from starlette.background import BackgroundTask
 import mail
 
 ORIGIN_BASE = os.environ.get(
-    "ORIGIN_BASE", "https://edccorp.github.io/blender-extensions"
+    "ORIGIN_BASE", "https://edccorp.github.io/edc-software"
 ).rstrip("/")
 GH_TOKEN = os.environ.get("GH_TOKEN", "")
 CACHE_TTL = int(os.environ.get("CACHE_TTL", "300"))
