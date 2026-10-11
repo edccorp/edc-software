@@ -58,7 +58,18 @@ PRODUCT_IDS = ("cammatch", "hve_toolkit", "point_cloud_toolkit", "recon_toolkit"
 RESTRICTED_IDS = ("video_forensics_toolkit", "audio_forensics_toolkit",
                   "visibility_toolkit", "recon_calculations", "blendmotion")
 
-GRANTABLE_IDS = PRODUCT_IDS + RESTRICTED_IDS
+#: HVE 2027 and its engines and modules. Like the internal tools, a "*"
+#: never reaches them: they have to be named. Keep in step with
+#: HVE_FEATURES in gateway/licensing.py.
+HVE_IDS = ("hve", "edcrash", "edsmac", "edsmac4", "simon", "dymesh", "edsvs",
+           "edvts", "edvsm", "edvds", "edhis", "edgen", "gatb", "singletrack",
+           "damagestudio", "brakedesigner", "edcdb")
+
+GRANTABLE_IDS = PRODUCT_IDS + RESTRICTED_IDS + HVE_IDS
+
+#: --products all: every product there is, published, internal and HVE.
+#: The master account's shape, and only the master account's.
+EVERYTHING = ["*", *RESTRICTED_IDS, *HVE_IDS]
 
 
 def die(message: str) -> None:
@@ -204,11 +215,14 @@ def parse_products(raw: str | None) -> list[str] | None:
     """
     if raw is None or raw.strip() in ("", "*"):
         return None
+    if raw.strip().lower() == "all":
+        return list(EVERYTHING)
     products = [p.strip() for p in raw.split(",") if p.strip()]
     unknown = [p for p in products if p != "*" and p not in GRANTABLE_IDS]
     if unknown:
         die(f"unknown product id(s) {unknown}; valid: "
-            f"{', '.join(GRANTABLE_IDS)}, or * for the published four")
+            f"{', '.join(GRANTABLE_IDS)}, * for the published four, "
+            "or all for everything (the master account)")
     return products
 
 
@@ -551,8 +565,10 @@ def main() -> None:
                                    "their own secret at /recover")
     p.add_argument("--products", help=f"comma-separated ids ({', '.join(PRODUCT_IDS)}); "
                                       f"omit for all published. Internal tools "
-                                      f"({', '.join(RESTRICTED_IDS)}) must be named "
-                                      f"outright, and can follow a * ")
+                                      f"({', '.join(RESTRICTED_IDS)}) and HVE "
+                                      f"({', '.join(HVE_IDS)}) must be named "
+                                      f"outright, and can follow a *; "
+                                      f"'all' is everything (the master account)")
     p.add_argument("--expires", help="YYYY-MM-DD — updates stop after this date; omit for perpetual")
     p.set_defaults(func=cmd_add)
 
@@ -561,7 +577,8 @@ def main() -> None:
 
     p = sub.add_parser("set-products", help="change the products included with a customer's repository access")
     p.add_argument("customer", help="customer name, email, or repository secret")
-    p.add_argument("--products", help="comma-separated ids, or * for all")
+    p.add_argument("--products", help="comma-separated ids, * for the published "
+                                      "four, or all for everything (master account)")
     p.add_argument("--expires", help="YYYY-MM-DD — updates stop after this date; omit for perpetual")
     p.set_defaults(func=cmd_set_products)
 

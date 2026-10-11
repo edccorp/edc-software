@@ -12,6 +12,12 @@ and download; this app validates it and serves:
                                             the private GitHub release
                                             asset via GH_TOKEN)
     GET /healthz           liveness probe  (public)
+    POST /v1/activate      HVE: activate this computer, get a signed license
+    POST /v1/refresh       HVE: the same license re-signed, no write
+    POST /v1/deactivate    HVE: release a computer's seat
+    GET /v1/machines       HVE: the license's activated computers
+                           (all four take the secret as a Bearer token;
+                           licensing.py holds the rules)
 
 Environment variables:
     CUSTOMER_TOKENS  JSON object mapping repository secret -> customer. A plain string
@@ -51,6 +57,10 @@ Environment variables:
     ORIGIN_BASE      Pages origin serving index.json/packages.json
                      (default https://edccorp.github.io/edc-software)
     CACHE_TTL        origin cache seconds (default 300)
+    LICENSE_SIGNING_KEY  the Ed25519 private key (PEM) that signs HVE
+                     licenses; the /v1 endpoints answer 503 without it
+    LICENSE_KEY_ID   the key's name in each license (default 2026a); HVE
+                     trusts a license only under a kid it knows
 """
 
 import base64
@@ -68,6 +78,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
 from starlette.background import BackgroundTask
 
+import licensing
 import mail
 
 ORIGIN_BASE = os.environ.get(
@@ -94,6 +105,16 @@ except json.JSONDecodeError as exc:
     STRIPE_PRICES = {}
     PRICES_ERROR = f"STRIPE_PRICES is not valid JSON: {exc}"
     print(f"[gateway] ERROR: {PRICES_ERROR}")
+LICENSE_KEY_ID = os.environ.get("LICENSE_KEY_ID", "2026a").strip() or "2026a"
+try:
+    LICENSE_KEY = (licensing.load_signing_key(os.environ["LICENSE_SIGNING_KEY"])
+                   if os.environ.get("LICENSE_SIGNING_KEY", "").strip() else None)
+    LICENSE_KEY_ERROR = None
+except Exception as exc:  # noqa: BLE001 -- any parse failure is the same answer
+    LICENSE_KEY = None
+    # The exception's text, never the variable's: it holds the private key.
+    LICENSE_KEY_ERROR = f"LICENSE_SIGNING_KEY could not be read: {type(exc).__name__}"
+    print(f"[gateway] ERROR: {LICENSE_KEY_ERROR}")
 PUBLIC_BASE = os.environ.get("PUBLIC_BASE", "https://extensions.edccorp.com").rstrip("/")
 ACCESS_URL = f"{PUBLIC_BASE}/access-and-licensing.html"
 # Products currently offered free: included with every token, and obtainable
@@ -416,11 +437,13 @@ async def admin_add_customer(request: Request):
     products = body.get("products") or []
     if isinstance(products, str):
         products = [p.strip() for p in products.split(",") if p.strip()]
-    unknown = [p for p in products if p not in PRODUCT_IDS and p != "*"]
+    unknown = [p for p in products if p not in PRODUCT_IDS and p != "*"
+               and p not in licensing.HVE_FEATURES]
     if unknown:
         raise HTTPException(
             status_code=400,
-            detail=f"unknown product ids {unknown}; valid: {', '.join(PRODUCT_IDS)} or *",
+            detail=(f"unknown product ids {unknown}; valid: {', '.join(PRODUCT_IDS)}, "
+                    f"{', '.join(licensing.HVE_FEATURES)} or *"),
         )
     if "*" in products:
         products = []
@@ -507,7 +530,8 @@ def _session_products(session: dict) -> list[str]:
     ids = list(dict.fromkeys(ids))
     if "*" in ids:
         return ["*"]
-    unknown = [p for p in ids if p not in PRODUCT_IDS]
+    unknown = [p for p in ids if p not in PRODUCT_IDS
+               and p not in licensing.HVE_FEATURES]
     if not ids or unknown:
         print(
             f"[gateway] ERROR: session {session.get('id')} has "
@@ -1296,11 +1320,225 @@ if its tab doesn't show. {_lost_secret_line()}</p>""")
     ))
 
 
+# --------------------------------------------------------------------------
+# HVE licensing: activate a computer, refresh its license, release it.
+# The rules live in licensing.py; these only authenticate, rate-limit,
+# read and write the customer file.
+
+#: (window seconds, most requests in it) per client address, per endpoint
+#: kind. Generous for a real office -- a lab re-imaging twenty machines in
+#: an afternoon fits -- and small for someone guessing secrets.
+LICENSE_LIMITS = {"write": (600.0, 30), "refresh": (600.0, 120), "fail": (600.0, 10)}
+_LICENSE_HITS: dict = {}
+
+
+def _client_address(request: Request) -> str:
+    """The caller's address as Railway's edge saw it.
+
+    The LAST X-Forwarded-For entry, not the first: the first is whatever
+    the caller chose to send, and keying a limit on that is keying it on
+    nothing.
+    """
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded.strip():
+        return forwarded.split(",")[-1].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _over_limit(kind: str, key: str, record: bool = True) -> bool:
+    window, most = LICENSE_LIMITS[kind]
+    now = time.monotonic()
+    hits = [t for t in _LICENSE_HITS.get((kind, key), []) if now - t < window]
+    over = len(hits) >= most
+    if record and not over:
+        hits.append(now)
+    _LICENSE_HITS[(kind, key)] = hits
+    return over
+
+
+def _license_refusal(error: "licensing.LicenseError") -> HTTPException:
+    return HTTPException(status_code=error.status, detail=error.body())
+
+
+async def _license_request(request: Request, kind: str) -> tuple[str, dict]:
+    """Common front of every /v1 call: configured, not rate-limited, a JSON
+    body, a secret. Returns (secret, body)."""
+    if LICENSE_KEY is None:
+        raise HTTPException(status_code=503, detail={
+            "code": "not_configured",
+            "message": "HVE licensing is not available right now. Try again "
+                       "later or contact Engineering Dynamics Company."})
+    address = _client_address(request)
+    if _over_limit("fail", address, record=False) or _over_limit(kind, address):
+        raise HTTPException(status_code=429, detail={
+            "code": "rate_limited",
+            "message": "Too many license requests from this network. Wait a "
+                       "few minutes and try again."})
+    auth = request.headers.get("authorization", "")
+    secret = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+    if request.method == "GET":
+        body = {}
+    else:
+        try:
+            body = await request.json()
+            assert isinstance(body, dict)
+        except Exception:
+            raise HTTPException(status_code=400, detail={
+                "code": "bad_request", "message": "A JSON object body is required."})
+    return secret, body
+
+
+def _unknown_secret(address: str) -> HTTPException:
+    _over_limit("fail", address)
+    return HTTPException(status_code=401, detail={
+        "code": "bad_secret",
+        "message": "That EDC Software secret was not recognised. Check it, or "
+                   + ("have it emailed to you at https://extensions.edccorp.com/recover."
+                      if mail.configured() else
+                      "contact Engineering Dynamics Company.")})
+
+
+async def _change_entry(secret: str, address: str, change) -> tuple[dict, object]:
+    """Read the customer file fresh, apply `change(entry)` to this secret's
+    entry, and write it back if it reports a change. Returns (entry, result).
+
+    Fresh rather than cached: a seat count read from a minute-old copy would
+    let two computers take the last seat at once. A write that races another
+    is retried once on the new file, as purchases are.
+    """
+    if not (ADMIN_GH_TOKEN and CUSTOMERS_REPO):
+        raise HTTPException(status_code=503, detail={
+            "code": "not_configured",
+            "message": "HVE licensing is not available right now."})
+    for attempt in (1, 2):
+        customers, sha = await _read_customers_file()
+        entry = customers.get(secret) if secret else None
+        if not isinstance(entry, dict):
+            # The compact string form names every Blender product and no
+            # HVE feature, so it can never hold an HVE license.
+            if isinstance(entry, str):
+                raise _license_refusal(licensing.LicenseError(
+                    403, "no_hve", "This EDC Software secret does not include HVE."))
+            raise _unknown_secret(address)
+        result, changed = change(entry)
+        if not changed:
+            return entry, result
+        try:
+            await _write_customers_file(
+                customers, sha, f"HVE license: {result[1]} for {entry.get('name', 'unnamed')}")
+            return entry, result
+        except HTTPException as exc:
+            if exc.status_code == 409 and attempt == 1:
+                continue
+            raise
+
+
+def _signed_license(secret: str, entry: dict, machine: dict) -> dict:
+    products = _entitlements(entry)["products"]
+    claims = licensing.claims(secret, entry, products, machine, LICENSE_KEY_ID,
+                              datetime.now(timezone.utc))
+    return {"license": licensing.encode_license(claims, LICENSE_KEY),
+            "activation": machine["id"], "claims": claims}
+
+
+@app.post("/v1/activate")
+async def license_activate(request: Request):
+    """Activate this computer: a seat if one is free, the same seat if it is
+    the computer already holding one. Body: {"fingerprint": [h1, h2, h3],
+    "hostname": "...", "app_version": "2027.1"}."""
+    secret, body = await _license_request(request, "write")
+    address = _client_address(request)
+    try:
+        fp = licensing.parse_fingerprint(body.get("fingerprint"))
+        hostname = licensing.clean_text(body.get("hostname"))
+        app_version = licensing.clean_text(body.get("app_version"), 32)
+
+        def change(entry):
+            # Entitlement first: a secret without HVE must not take a seat.
+            licensing.hve_entitlement(_entitlements(entry)["products"])
+            machine, changed = licensing.activate(
+                entry, fp, hostname, app_version, datetime.now(timezone.utc))
+            return (machine, "activate " + (hostname or machine["id"])), changed
+
+        entry, (machine, _note) = await _change_entry(secret, address, change)
+        print(f"[gateway] license: activated {machine['id']} "
+              f"({hostname or 'no hostname'}) for {entry.get('name', 'unnamed')}")
+        return _signed_license(secret, entry, machine)
+    except licensing.LicenseError as error:
+        raise _license_refusal(error)
+
+
+@app.post("/v1/refresh")
+async def license_refresh(request: Request):
+    """The same license, re-signed with today's entitlements. Never writes:
+    a fleet of computers refreshing must not become a stream of commits.
+    Body: {"activation": "A-...", "fingerprint": [h1, h2, h3]}."""
+    secret, body = await _license_request(request, "refresh")
+    address = _client_address(request)
+    try:
+        fp = licensing.parse_fingerprint(body.get("fingerprint"))
+        entry = (await _customer_tokens()).get(secret) if secret else None
+        if isinstance(entry, str):
+            raise licensing.LicenseError(
+                403, "no_hve", "This EDC Software secret does not include HVE.")
+        if not isinstance(entry, dict):
+            raise _unknown_secret(address)
+        machine = licensing.find_activation(entry, str(body.get("activation") or ""))
+        if not licensing.same_computer(machine["fp"], fp):
+            # The activation id is on the computer's disk; copied to another
+            # computer it must not carry the seat with it.
+            raise licensing.LicenseError(
+                409, "different_computer",
+                "This license was activated on a different computer. "
+                "Activate this one instead.")
+        return _signed_license(secret, entry, machine)
+    except licensing.LicenseError as error:
+        raise _license_refusal(error)
+
+
+@app.post("/v1/deactivate")
+async def license_deactivate(request: Request):
+    """Release a computer's seat. Any computer on the license can be
+    released with its secret -- that is how a dead machine is freed from a
+    working one. Body: {"activation": "A-..."}."""
+    secret, body = await _license_request(request, "write")
+    address = _client_address(request)
+    activation = str(body.get("activation") or "")
+
+    def change(entry):
+        released = licensing.deactivate(entry, activation)
+        return (released, "release " + activation), released
+
+    entry, (released, _note) = await _change_entry(secret, address, change)
+    if released:
+        print(f"[gateway] license: released {activation} for {entry.get('name', 'unnamed')}")
+    # Releasing something already released is success: the seat is free,
+    # which is what was asked for, and a retry after a lost reply must not
+    # read as a failure.
+    return {"released": activation, "was_active": released,
+            "machines": licensing.public_machines(entry)}
+
+
+@app.get("/v1/machines")
+async def license_machines(request: Request):
+    """The computers holding this license's seats, for choosing one to release."""
+    secret, _body = await _license_request(request, "refresh")
+    entry = (await _customer_tokens()).get(secret) if secret else None
+    if isinstance(entry, str):
+        entry = {"name": entry}
+    if not isinstance(entry, dict):
+        raise _unknown_secret(_client_address(request))
+    return {"license_type": licensing.license_type(entry),
+            "seats": licensing.seat_limit(entry),
+            "machines": licensing.public_machines(entry)}
+
+
 @app.get("/healthz")
 async def healthz():
     tokens = await _customer_tokens()
     body = {
-        "ok": TOKENS_ERROR is None and PRICES_ERROR is None and FREE_TERM_ERROR is None,
+        "ok": (TOKENS_ERROR is None and PRICES_ERROR is None
+               and FREE_TERM_ERROR is None and LICENSE_KEY_ERROR is None),
         "tokens_configured": len(tokens),
         "store_products": len(STRIPE_PRICES),
         "stripe_key": bool(STRIPE_SECRET_KEY),
@@ -1320,7 +1558,15 @@ async def healthz():
         "free_products": FREE_PRODUCTS,
         "free_term_days": FREE_TERM_DAYS,
         "license_term_days": LICENSE_TERM_DAYS.strip() or None,
+        # The public key's fingerprint, so the deployed signing key can be
+        # checked against the one HVE trusts (hve-next licensing/keys).
+        "license_signing": (
+            {"kid": LICENSE_KEY_ID,
+             "public_key": licensing.public_key_fingerprint(LICENSE_KEY)}
+            if LICENSE_KEY is not None else None),
     }
+    if LICENSE_KEY_ERROR:
+        body["license_signing_error"] = LICENSE_KEY_ERROR
     if PRICES_ERROR:
         body["store_error"] = PRICES_ERROR
     if FREE_TERM_ERROR:

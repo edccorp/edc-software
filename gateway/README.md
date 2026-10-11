@@ -410,3 +410,74 @@ that cannot help and will not say so.
 or `NOT SENT` for every attempt, and a refusal is logged with Resend's own
 reason. Delivery, bounces and complaints are in Resend's own dashboard,
 which is the thing SMTP could not have told us.
+
+## HVE licenses
+
+The same gateway licenses HVE 2027. HVE activates a computer against
+`license.edccorp.com` with the customer's EDC Software secret, and gets back
+a license signed with an Ed25519 key that every copy of HVE trusts. The rules
+are in `licensing.py`. The design, and what HVE does with the document, is in
+hve-next's `docs/LICENSING.md`.
+
+| Endpoint | Does | Writes the customer file |
+|---|---|---|
+| `POST /v1/activate` | takes a seat for this computer, or reuses the one it holds | only when something changed |
+| `POST /v1/refresh` | the same license re-signed with today's products | never |
+| `POST /v1/deactivate` | releases a computer's seat (any computer on the license) | when it was active |
+| `GET /v1/machines` | the computers holding seats, by hostname | never |
+
+Each takes the secret as `Authorization: Bearer <secret>`. Requests are
+limited per client address, and repeated unknown secrets lock that address
+out for ten minutes.
+
+**Variables**
+
+- `LICENSE_SIGNING_KEY`: the whole text of `hve-license-2026a.pem`, including
+  the BEGIN and END lines. Without it the four endpoints answer 503. The
+  private key never goes in a repository.
+- `LICENSE_KEY_ID`: the key's name, written into every license (default
+  `2026a`). HVE accepts a license only under a name it knows.
+
+`/healthz` shows `license_signing.public_key`, the first 16 hex of the
+public key's SHA-256. It must match the figure in hve-next's
+`licensing/keys/README.md` (`a32897b6e29d25ed` for `2026a`). If it does not,
+the key in Railway is the wrong one.
+
+**On the customer entry**
+
+```json
+"edc_...": {
+  "name": "Example Reconstruction LLC",
+  "products": {"hve": "2027-10-01", "simon": "2027-10-01", "edsmac4": "2027-10-01"},
+  "license_type": "seat",
+  "seats": 2,
+  "machines": [
+    {"id": "A-1f2e3d4c5b6a", "fp": ["…", "…", "…"], "hostname": "LAB-1",
+     "app_version": "2027.1", "first": "2026-10-11T12:00:00Z", "last": "2026-10-11T12:00:00Z"}
+  ]
+}
+```
+
+- **Products:** `hve` is required. The others are engines and modules (`simon`,
+  `dymesh`, `edsmac4`, `gatb`, …; the list is `HVE_FEATURES`).
+  - `hve`'s date is `maintenance_until`: builds released after it do not run.
+  - A lapsed engine date does not take the engine away from builds already
+    covered.
+  - **A `"*"` grant never includes HVE.** It has to be named.
+    `"*"` means the four published Blender add-ons. Only the master account
+    has everything: `tools/customer.py set-products "<master>" --products all`
+    gives it every add-on, every internal tool and every HVE feature.
+- **`license_type`:** `seat` (the default), one computer per seat, or `site`,
+  any number of computers.
+- **`seats`:** defaults to 1. Anything that is not a positive whole number
+  reads as 1, never as unlimited.
+- **`machines`:** written by the gateway. To free a dead computer's seat by
+  hand, delete its row. HVE on that computer keeps running until its license's
+  `offline_until`, at most 60 days.
+- **Moving a seat:** release, then activate on the new computer. There is no
+  cap on how often a seat moves.
+
+**Selling HVE:** set `products` metadata on a Payment Link to HVE ids, for
+example `hve,simon,edsmac4`. A buyer starts with one seat. To change seats or
+make a site license, edit `seats` / `license_type` on the entry for now.
+Invoice payments (check, ACH, purchase order) are not handled yet.

@@ -486,3 +486,37 @@ def test_the_two_restricted_lists_agree():
                 "visibility_toolkit", "recon_calculations", "blendmotion"):
         assert pid in restricted, f"{pid} cannot be granted"
         assert pid in gateway, f"{pid} is not restricted by the gateway"
+
+
+# ------------------------------------- HVE, and the master account's "all"
+
+def test_hve_is_grantable_by_name(cli):
+    assert cli.parse_products("hve,simon,edsmac4") == ["hve", "simon", "edsmac4"]
+    assert cli.parse_products("*,hve") == ["*", "hve"]
+
+
+def test_all_is_everything_and_star_is_not(cli):
+    everything = cli.parse_products("all")
+    assert "*" in everything
+    for pid in (*cli.RESTRICTED_IDS, *cli.HVE_IDS):
+        assert pid in everything, pid
+    # "*" alone stays the published four: the ordinary customer's shape,
+    # which must not quietly include HVE or the internal tools.
+    assert cli.parse_products("*") is None
+
+
+def test_all_reaches_hve_through_the_gateway_rules(cli):
+    """The CLI's "all" is only everything if the gateway reads it so."""
+    import sys
+    sys.path.insert(0, str(ROOT / "gateway"))
+    import licensing
+    products = {p: None for p in cli.parse_products("all")}
+    features, until = licensing.hve_entitlement(products)
+    assert features == list(licensing.HVE_FEATURES) and until is None
+
+
+def test_the_cli_and_gateway_hve_lists_agree(cli):
+    import sys
+    sys.path.insert(0, str(ROOT / "gateway"))
+    import licensing
+    assert tuple(cli.HVE_IDS) == tuple(licensing.HVE_FEATURES)
