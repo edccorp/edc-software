@@ -1666,6 +1666,14 @@ async def offline_post(request: Request):
         return _offline_reply(_offline_form(secret, detail.get("message", "Refused."), bad=True),
                               exc.status_code)
 
+    # Enter in the secret box submits the form with its FIRST button, "Get
+    # the license file", and no request: that is someone looking, not someone
+    # activating. Show the computers and say what the upload is for.
+    hint = ""
+    if action == "activate" and not form.get("request", "").strip():
+        action = "list"
+        hint = ("To get a license file, choose the activation request from the computer "
+                "without internet first, then click Get the license file.")
     try:
         if action == "activate":
             fp, hostname, app_version = licensing.parse_offline_request(form.get("request", ""))
@@ -1704,7 +1712,7 @@ async def offline_post(request: Request):
             entry = {"name": entry}
         if not isinstance(entry, dict):
             raise _unknown_secret(address)
-        return _offline_reply(_offline_form(secret) + _machines_card(secret, entry))
+        return _offline_reply(_offline_form(secret, hint) + _machines_card(secret, entry))
     except licensing.LicenseError as error:
         if error.code == "seats_full":
             current = (await _customer_tokens()).get(secret)

@@ -444,7 +444,7 @@ def test_offline_activation_takes_a_seat_like_any_other(gw):
 
 
 def test_a_file_that_is_not_a_request_is_refused_as_one(gw):
-    for bad in ("", "hello", json.dumps({"fingerprint": FP}), REQUEST.replace(FP[0], "zz")):
+    for bad in ("hello", json.dumps({"fingerprint": FP}), REQUEST.replace(FP[0], "zz")):
         r = form(gw, secret=SECRET, action="activate", request=bad)
         assert r.status_code == 422, bad
         assert "attachment" not in r.headers.get("content-disposition", "")
@@ -480,3 +480,14 @@ def test_offline_page_gives_a_blender_only_customer_no_seat(gw):
     r = form(gw, secret="edc_recon", action="activate", request=REQUEST)
     assert r.status_code == 403 and "does not include HVE" in r.text
     assert gw.state["writes"] == 0
+
+
+def test_enter_in_the_secret_box_shows_the_computers_not_an_error(gw):
+    # Enter submits with the first button, "Get the license file", and an
+    # empty request: show the computers and say what the upload is for.
+    call(gw, "/v1/activate", fingerprint=FP, hostname="LAB-1")
+    r = form(gw, secret=SECRET, action="activate", request="")
+    assert r.status_code == 200
+    assert "LAB-1" in r.text and "choose the activation request" in r.text
+    assert "not an HVE activation request" not in r.text
+    assert gw.state["writes"] == 1          # the online activation only
