@@ -48,6 +48,10 @@ HVE_FEATURES = (
 #: license, and when an unrefreshed one stops covering a run.
 REFRESH_DAYS = 30
 OFFLINE_DAYS = 60
+#: An offline activation (the /offline page): the computer has no internet,
+#: so it cannot refresh. Its license runs this long and the customer imports
+#: a new one before it ends.
+OFFLINE_FILE_DAYS = 365
 
 DOCUMENT_VERSION = 1
 
@@ -287,9 +291,14 @@ def deactivate(entry: dict, activation: str) -> bool:
 
 
 def claims(token: str, entry: dict, products: dict, machine: dict,
-           kid: str, now: datetime) -> dict:
-    """The license document's claims for one activated computer."""
+           kid: str, now: datetime, offline: bool = False) -> dict:
+    """The license document's claims for one activated computer.
+
+    `offline` is the /offline page's license file: no refresh is possible,
+    so refresh_by and offline_until are both a year out."""
     features, maintenance_until = hve_entitlement(products)
+    refresh = OFFLINE_FILE_DAYS if offline else REFRESH_DAYS
+    lasts = OFFLINE_FILE_DAYS if offline else OFFLINE_DAYS
     return {
         "v": DOCUMENT_VERSION,
         "kid": kid,
@@ -301,6 +310,22 @@ def claims(token: str, entry: dict, products: dict, machine: dict,
         "features": features,
         "maintenance_until": maintenance_until,
         "issued": _stamp(now),
-        "refresh_by": _stamp(now + timedelta(days=REFRESH_DAYS)),
-        "offline_until": _stamp(now + timedelta(days=OFFLINE_DAYS)),
+        "refresh_by": _stamp(now + timedelta(days=refresh)),
+        "offline_until": _stamp(now + timedelta(days=lasts)),
     }
+
+
+def parse_offline_request(text: str) -> tuple[list[str], str, str]:
+    """(fingerprint, hostname, app_version) from the file HVE's "Save
+    activation request" writes. It carries no secret: the customer types that
+    on the page, so a request file lost on the way grants nothing."""
+    try:
+        req = json.loads(text)
+    except (TypeError, ValueError):
+        req = None
+    if not isinstance(req, dict) or req.get("type") != "hve-activation-request":
+        raise LicenseError(422, "bad_request_file",
+                           "That is not an HVE activation request. In HVE, use Help > "
+                           "License > This computer has no internet > Save activation request.")
+    return (parse_fingerprint(req.get("fingerprint")),
+            clean_text(req.get("hostname")), clean_text(req.get("app_version"), 32))

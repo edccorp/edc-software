@@ -395,3 +395,88 @@ def test_healthz_shows_the_public_key_fingerprint_and_never_the_key(gw):
 def test_hve_ids_are_valid_purchase_products(gw):
     session = {"id": "cs_test", "metadata": {"products": "hve,simon"}}
     assert gw.main._session_products(session) == ["hve", "simon"]
+
+
+# ------------------------------------------------------------- /offline
+
+from urllib.parse import urlencode  # noqa: E402
+
+REQUEST = json.dumps({"type": "hve-activation-request", "v": 1, "fingerprint": FP,
+                      "hostname": "AIRGAP-1", "app_version": "2027.1",
+                      "created": "2026-10-11T12:00:00Z"})
+
+
+def form(gw, ip="203.0.113.5", **fields):
+    return gw.post("/offline", content=urlencode(fields),
+                   headers={"content-type": "application/x-www-form-urlencoded",
+                            "x-forwarded-for": ip})
+
+
+def test_the_offline_page_is_a_form(gw):
+    r = gw.get("/offline")
+    assert r.status_code == 200 and 'name="secret"' in r.text and 'name="request"' in r.text
+
+
+def test_offline_activation_downloads_a_year_long_license_for_that_computer(gw):
+    r = form(gw, secret=SECRET, action="activate", request=REQUEST)
+    assert r.status_code == 200, r.text
+    assert "attachment" in r.headers["content-disposition"]
+    assert "hve-license-AIRGAP-1.hvelic" in r.headers["content-disposition"]
+    payload, sig = r.text.strip().split(".")
+    KEY.public_key().verify(_b64d(sig), _b64d(payload))
+    c = json.loads(_b64d(payload))
+    assert c["fingerprint"] == FP and c["features"] == ["hve", "simon"]
+    issued = datetime.strptime(c["issued"], "%Y-%m-%dT%H:%M:%SZ")
+    until = datetime.strptime(c["offline_until"], "%Y-%m-%dT%H:%M:%SZ")
+    assert (until - issued).days == licensing.OFFLINE_FILE_DAYS
+    assert c["refresh_by"] == c["offline_until"]     # nothing to refresh from
+    m = gw.state["customers"][SECRET]["machines"]
+    assert len(m) == 1 and m[0]["offline"] is True and m[0]["hostname"] == "AIRGAP-1"
+    assert gw.state["writes"] == 1
+
+
+def test_offline_activation_takes_a_seat_like_any_other(gw):
+    call(gw, "/v1/activate", fingerprint=OTHER, hostname="ONLINE-PC")
+    r = form(gw, secret=SECRET, action="activate", request=REQUEST)
+    assert r.status_code == 409
+    assert "ONLINE-PC" in r.text and "Release" in r.text     # the holder, releasable
+    assert len(gw.state["customers"][SECRET]["machines"]) == 1
+
+
+def test_a_file_that_is_not_a_request_is_refused_as_one(gw):
+    for bad in ("", "hello", json.dumps({"fingerprint": FP}), REQUEST.replace(FP[0], "zz")):
+        r = form(gw, secret=SECRET, action="activate", request=bad)
+        assert r.status_code == 422, bad
+        assert "attachment" not in r.headers.get("content-disposition", "")
+    assert gw.state["writes"] == 0
+
+
+def test_offline_page_refuses_an_unknown_secret_and_counts_it(gw):
+    r = form(gw, secret="edc_nope", action="activate", request=REQUEST)
+    assert r.status_code == 401 and "not recognised" in r.text
+    assert gw.state["writes"] == 0
+    assert len(gw.main._LICENSE_HITS[("fail", "203.0.113.5")]) == 1
+
+
+def test_the_page_lists_and_releases_computers_and_never_shows_a_fingerprint(gw):
+    call(gw, "/v1/activate", fingerprint=FP, hostname="DEAD-PC")
+    r = form(gw, secret=SECRET, action="list")
+    assert r.status_code == 200 and "DEAD-PC" in r.text and FP[0] not in r.text
+    activation = gw.state["customers"][SECRET]["machines"][0]["id"]
+    r = form(gw, secret=SECRET, action="release", activation=activation)
+    assert r.status_code == 200 and "Released." in r.text
+    assert gw.state["customers"][SECRET]["machines"] == []
+
+
+def test_a_hostile_hostname_is_escaped_on_the_page(gw):
+    call(gw, "/v1/activate", fingerprint=FP, hostname="<script>x</script>")
+    r = form(gw, secret=SECRET, action="list")
+    assert "<script>x</script>" not in r.text and "&lt;script&gt;" in r.text
+
+
+def test_offline_page_gives_a_blender_only_customer_no_seat(gw):
+    gw.state["customers"]["edc_recon"] = {"name": "Recon Only",
+                                          "products": {"recon_toolkit": None, "*": None}}
+    r = form(gw, secret="edc_recon", action="activate", request=REQUEST)
+    assert r.status_code == 403 and "does not include HVE" in r.text
+    assert gw.state["writes"] == 0

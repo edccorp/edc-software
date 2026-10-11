@@ -16,6 +16,7 @@ and download; this app validates it and serves:
     POST /v1/refresh       HVE: the same license re-signed, no write
     POST /v1/deactivate    HVE: release a computer's seat
     GET /v1/machines       HVE: the license's activated computers
+    GET|POST /offline      HVE: offline activation and seat release, in a browser
                            (all four take the secret as a Bearer token;
                            licensing.py holds the rules)
 
@@ -1433,10 +1434,10 @@ async def _change_entry(secret: str, address: str, change) -> tuple[dict, object
             raise
 
 
-def _signed_license(secret: str, entry: dict, machine: dict) -> dict:
+def _signed_license(secret: str, entry: dict, machine: dict, offline: bool = False) -> dict:
     products = _entitlements(entry)["products"]
     claims = licensing.claims(secret, entry, products, machine, LICENSE_KEY_ID,
-                              datetime.now(timezone.utc))
+                              datetime.now(timezone.utc), offline=offline)
     return {"license": licensing.encode_license(claims, LICENSE_KEY),
             "activation": machine["id"], "claims": claims}
 
@@ -1531,6 +1532,187 @@ async def license_machines(request: Request):
     return {"license_type": licensing.license_type(entry),
             "seats": licensing.seat_limit(entry),
             "machines": licensing.public_machines(entry)}
+
+
+# --------------------------------------------------------------------------
+# /offline: the HVE license page in a browser. Two jobs, both for a computer
+# that cannot do them itself:
+#   - OFFLINE ACTIVATION. HVE on a computer with no internet saves a request
+#     file (its fingerprint, name and version; never the secret). On any
+#     connected computer the customer enters their secret here and uploads
+#     it, and gets back a license file that runs for a year without a
+#     refresh. It takes a seat exactly as an online activation does.
+#   - RELEASING A SEAT from a computer that is dead, gone or offline.
+# Form posts are parsed by hand (urlencoded), so the page needs no package
+# beyond what the gateway already has.
+
+def _offline_html(inner: str) -> str:
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>HVE license — EDC Software</title>
+<style>
+  :root {{ color-scheme: light dark;
+    --bg: #f6f7f9; --card: #ffffff; --ink: #1c2530; --muted: #5b6773;
+    --accent: #6b2440; --border: #e2e6ea; --bad: #a3361f; }}
+  @media (prefers-color-scheme: dark) {{
+    :root {{ --bg: #10151b; --card: #1a2129; --ink: #e8edf2;
+      --muted: #9aa7b2; --accent: #d98aa0; --border: #2a333d; --bad: #f08c6c; }} }}
+  body {{ margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.6 system-ui, "Segoe UI", sans-serif; }}
+  main {{ max-width: 40rem; margin: 3rem auto; padding: 0 1rem; }}
+  .card {{ background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 1.5rem 2rem; margin-bottom: 1rem; }}
+  h1 {{ margin: 0 0 .5rem; font-size: 1.4rem; }}
+  h2 {{ margin: 0 0 .5rem; font-size: 1.1rem; }}
+  .muted {{ color: var(--muted); }}
+  .bad {{ color: var(--bad); font-weight: 600; }}
+  label {{ display: block; margin-top: 1rem; font-weight: 600; }}
+  input[type=password], input[type=text], textarea {{ width: 100%; box-sizing: border-box;
+    padding: .6rem .7rem; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--bg); color: var(--ink); font-size: .95rem; }}
+  textarea {{ min-height: 7rem; font-family: ui-monospace, monospace; font-size: .8rem; }}
+  button {{ margin-top: 1rem; background: var(--accent); color: #fff; border: 0;
+    border-radius: 8px; padding: .65rem 1.1rem; font-size: 1rem; font-weight: 600;
+    cursor: pointer; }}
+  button.small {{ margin: 0; padding: .3rem .7rem; font-size: .85rem; }}
+  table {{ width: 100%; border-collapse: collapse; margin-top: .5rem; }}
+  td, th {{ text-align: left; padding: .4rem .3rem; border-bottom: 1px solid var(--border); }}
+</style></head><body><main>{inner}</main></body></html>"""
+
+
+def _offline_form(secret: str = "", message: str = "", bad: bool = False) -> str:
+    note = (f'<p class="{"bad" if bad else "muted"}">{html.escape(message)}</p>'
+            if message else "")
+    return f"""<div class="card">
+<h1>HVE license</h1>
+<p class="muted">For a computer without internet, and for releasing a seat held by a
+computer you no longer have. On a computer with internet, use Help &rsaquo; License in HVE
+instead.</p>
+{note}
+<form method="post" action="/offline">
+<label for="secret">Your EDC Software secret</label>
+<input type="password" id="secret" name="secret" value="{html.escape(secret)}" required
+       autocomplete="off">
+<h2 style="margin-top:1.5rem">Activate a computer without internet</h2>
+<p class="muted">In HVE on that computer: Help &rsaquo; License &rsaquo; This computer has no
+internet &rsaquo; Save activation request. Choose that file here (or paste its text).
+You get a license file to import there; it works for a year without internet.</p>
+<input type="file" id="reqfile" accept=".json,application/json">
+<textarea id="request" name="request" placeholder="The activation request's text"></textarea>
+<button name="action" value="activate">Get the license file</button>
+<button name="action" value="list" formnovalidate>Show the computers on this license</button>
+</form>
+<script>
+document.getElementById("reqfile").addEventListener("change", e => {{
+  const f = e.target.files[0]; if (!f) return;
+  f.text().then(t => {{ document.getElementById("request").value = t; }});
+}});
+</script>
+</div>"""
+
+
+def _machines_card(secret: str, entry: dict) -> str:
+    rows = ""
+    for m in licensing.public_machines(entry):
+        offline = any(x.get("offline") for x in licensing.machines(entry)
+                      if x["id"] == m["activation"])
+        rows += (f"<tr><td>{html.escape(m['hostname'] or '(unnamed)')}"
+                 f"{' <span class=muted>(offline)</span>' if offline else ''}</td>"
+                 f"<td>{html.escape(m['first'][:10])}</td>"
+                 f"<td><form method=post action=/offline style='margin:0'>"
+                 f"<input type=hidden name=secret value='{html.escape(secret, quote=True)}'>"
+                 f"<input type=hidden name=activation value='{html.escape(m['activation'], quote=True)}'>"
+                 f"<button class=small name=action value=release>Release</button></form></td></tr>")
+    limit = licensing.seat_limit(entry)
+    seats = "Company-wide: any number of computers." if limit is None else f"{limit} seat(s)."
+    body = (f"<table><tr><th>Computer</th><th>Activated</th><th></th></tr>{rows}</table>"
+            if rows else '<p class="muted">No computers are activated.</p>')
+    return f"""<div class="card"><h2>Computers on this license</h2>
+<p class="muted">{html.escape(entry.get("name", ""))} &middot; {seats}</p>{body}
+<p class="muted">Releasing a computer frees its seat now. HVE on it keeps running until its
+license's offline period ends.</p></div>"""
+
+
+def _offline_reply(inner: str, status: int = 200) -> HTMLResponse:
+    return HTMLResponse(_offline_html(inner), status_code=status)
+
+
+@app.get("/offline")
+async def offline_page():
+    return _offline_reply(_offline_form())
+
+
+@app.post("/offline")
+async def offline_post(request: Request):
+    from urllib.parse import parse_qs
+    form = {k: v[0] for k, v in parse_qs((await request.body()).decode("utf-8", "replace"),
+                                         keep_blank_values=True).items()}
+    secret = form.get("secret", "").strip()
+    action = form.get("action", "")
+    address = _client_address(request)
+    if LICENSE_KEY is None or not (ADMIN_GH_TOKEN and CUSTOMERS_REPO):
+        return _offline_reply(_offline_form(secret, "HVE licensing is not available right now. "
+                                            "Try again later.", bad=True), 503)
+    kind = "refresh" if action == "list" else "write"
+    if _over_limit("fail", address, record=False) or _over_limit(kind, address):
+        return _offline_reply(_offline_form(secret, "Too many license requests from this "
+                                            "network. Wait a few minutes and try again.",
+                                            bad=True), 429)
+
+    def refused(exc) -> HTMLResponse:
+        detail = exc.detail if isinstance(exc.detail, dict) else {"message": str(exc.detail)}
+        return _offline_reply(_offline_form(secret, detail.get("message", "Refused."), bad=True),
+                              exc.status_code)
+
+    try:
+        if action == "activate":
+            fp, hostname, app_version = licensing.parse_offline_request(form.get("request", ""))
+
+            def change(entry):
+                licensing.hve_entitlement(_entitlements(entry)["products"])
+                machine, changed = licensing.activate(
+                    entry, fp, hostname, app_version, datetime.now(timezone.utc))
+                if not machine.get("offline"):
+                    machine["offline"] = True
+                    changed = True
+                return (machine, "offline activate " + (hostname or machine["id"])), changed
+
+            entry, (machine, _n) = await _change_entry(secret, address, change)
+            doc = _signed_license(secret, entry, machine, offline=True)["license"]
+            print(f"[gateway] license: offline activation {machine['id']} "
+                  f"({hostname or 'no hostname'}) for {entry.get('name', 'unnamed')}")
+            safe = "".join(c for c in (hostname or "computer") if c.isalnum() or c in "-_")[:40]
+            return Response(doc + "\n", media_type="application/octet-stream", headers={
+                "Content-Disposition": f'attachment; filename="hve-license-{safe or "computer"}.hvelic"'})
+
+        if action == "release":
+            activation = form.get("activation", "")
+
+            def change(entry):
+                released = licensing.deactivate(entry, activation)
+                return (released, "release " + activation), released
+
+            entry, (released, _n) = await _change_entry(secret, address, change)
+            note = "Released." if released else "That computer was already released."
+            return _offline_reply(_offline_form(secret, note) + _machines_card(secret, entry))
+
+        # "list", or anything else: show the computers.
+        entry = (await _customer_tokens()).get(secret) if secret else None
+        if isinstance(entry, str):
+            entry = {"name": entry}
+        if not isinstance(entry, dict):
+            raise _unknown_secret(address)
+        return _offline_reply(_offline_form(secret) + _machines_card(secret, entry))
+    except licensing.LicenseError as error:
+        if error.code == "seats_full":
+            current = (await _customer_tokens()).get(secret)
+            card = _machines_card(secret, current) if isinstance(current, dict) else ""
+            return _offline_reply(_offline_form(secret, error.message, bad=True) + card, 409)
+        return _offline_reply(_offline_form(secret, error.message, bad=True), error.status)
+    except HTTPException as exc:
+        return refused(exc)
 
 
 @app.get("/healthz")

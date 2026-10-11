@@ -426,7 +426,17 @@ hve-next's `docs/LICENSING.md`.
 | `POST /v1/deactivate` | releases a computer's seat (any computer on the license) | when it was active |
 | `GET /v1/machines` | the computers holding seats, by hostname | never |
 
-Each takes the secret as `Authorization: Bearer <secret>`. Requests are
+Each takes the secret as `Authorization: Bearer <secret>`.
+
+**`/offline`** is the same in a browser, for two cases HVE cannot handle
+itself:
+- **A computer with no internet.** HVE saves an activation request: the
+  fingerprint, computer name and version, never the secret. The customer
+  uploads it on this page with their secret and downloads a license file that
+  runs for a year (`OFFLINE_FILE_DAYS`) without a refresh. It takes a seat
+  like any activation, and the machine row is marked `"offline": true`.
+- **A dead or missing computer.** The page lists the computers on the license,
+  each with a Release button. Requests are
 limited per client address, and repeated unknown secrets lock that address
 out for ten minutes.
 
