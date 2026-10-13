@@ -40,7 +40,7 @@ requirements = [
 
 [[faq]]
 q = "Does it replace classic HVE?"
-a = "Not yet. HVE 2027 installs in its own folder, uses its own .hvc case format, and never takes over the .hve file type, so classic HVE keeps working beside it. Open a classic case in HVE 2027 with File → Import."
+a = "Not yet. HVE 2027 installs in its own folder, uses its own .hvex case format, and never takes over the .hve file type, so classic HVE keeps working beside it. Open a classic case in HVE 2027 with File → Import."
 
 [[faq]]
 q = "How do I get a key?"
