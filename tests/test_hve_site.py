@@ -93,6 +93,22 @@ def test_a_draft_release_never_reaches_the_page(monkeypatch, tmp_path):
     assert "Version 2027.1.0" in page and "2027.2.0" not in page
 
 
+def test_a_prerelease_is_badged_by_its_stage_and_says_it_is_a_test_build():
+    pre = dict(RELEASE, tag_name="v2027.0.0-alpha.1", prerelease=True,
+               assets=RELEASE["assets"] + [
+                   {"name": "HVE-2027-2027.0.0-alpha.1-macos.dmg", "id": 15,
+                    "size": 23_000_000, "digest": "sha256:" + "c" * 64}])
+    page = build_index.render_hve_page(content(), pre, build_index.hve_downloads(pre))
+    assert '<span class="badge">Alpha</span>' in page
+    assert "Test build." in page and "Run anyway" in page and "right-click" in page
+    assert "Version 2027.0.0-alpha.1" in page
+    assert "/download/HVE-2027-2027.0.0-alpha.1-macos.dmg" in page
+    assert "Not available yet" not in page        # all three platforms offered
+    final = build_index.render_hve_page(content(), RELEASE, build_index.hve_downloads(RELEASE))
+    assert "Test build." not in final
+    assert f'<span class="badge">{content()["badge"]}</span>' in final
+
+
 def test_page_text_is_escaped():
     c = dict(content(), tagline="<script>x</script>")
     assert "<script>x</script>" not in build_index.render_hve_page(c, None, {})

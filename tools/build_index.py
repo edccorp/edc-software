@@ -976,6 +976,12 @@ def render_hve_page(c, release, downloads):
 
     version = (release or {}).get("tag_name", "").lstrip("v")
     published = ((release or {}).get("published_at") or "")[:10]
+    # A PRE-release (v2027.0.0-alpha.1) is a test build: the badge says which
+    # stage ("Alpha", "Beta") and a notice says what testers should expect.
+    prerelease = bool((release or {}).get("prerelease"))
+    badge = html.escape(c.get("badge", ""))
+    if prerelease and "-" in version:
+        badge = html.escape(version.split("-", 1)[1].split(".")[0].capitalize())
     cards = []
     for key, label, kind, _match in HVE_PLATFORMS:
         files = [(n, d) for n, d in downloads.items() if d["platform"] == key]
@@ -1003,6 +1009,9 @@ def render_hve_page(c, release, downloads):
         status = (f'<p><strong>Version {html.escape(version)}</strong>'
                   f'{" &middot; released " + html.escape(published) if published else ""}'
                   f'{sums_link}</p>')
+        if prerelease and c.get("prerelease_note"):
+            status += (f'<div class="notice"><strong>Test build.</strong> '
+                       f'{html.escape(c["prerelease_note"])}</div>')
         notes = render_notes(release.get("body") or "")
         whats_new = f'<h2>What’s new</h2>\n<div class="notes">{notes}</div>' if notes else ""
     else:
@@ -1051,7 +1060,7 @@ footer .mark svg {{ height: 28px; width: auto; }}
 </header>
 <div class="phero">
   <div>
-    <span class="badge">{esc('badge')}</span>
+    <span class="badge">{badge}</span>
     <h1>{esc('name')}</h1>
     <p class="tagline">{esc('tagline')}</p>
     {paragraphs(c.get('pitch', ''))}

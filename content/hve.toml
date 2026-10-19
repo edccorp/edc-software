@@ -6,6 +6,9 @@
 
 name = "HVE 2027"
 badge = "Preview"
+# Shown when the newest release is a PRE-release (its badge is then the stage
+# from the tag: "Alpha", "Beta").
+prerelease_note = "This version is for testing and is not yet a supported release. Windows asks before running it the first time: choose More info, then Run anyway. On a Mac, open the disk image, drag HVE 2027 to Applications, then the first time right-click it and choose Open. Please report anything that goes wrong to Engineering Dynamics Company."
 tagline = "Human · Vehicle · Environment simulation, rebuilt for today's computers."
 pitch = """HVE 2027 is the next major version of HVE, the physics-based simulation environment from Engineering Dynamics Company for reconstructing and simulating vehicle crashes and occupant motion. It runs the same EDC engines classic HVE runs, from the same physics source, in a new 3-D interface.
 
@@ -32,10 +35,9 @@ Each engine is licensed separately, and so is the EDC vehicle database. Your lic
 
 # Shown under "Requirements", one bullet each.
 requirements = [
-  "Windows 10 or 11, 64-bit; or 64-bit Linux",
-  "A graphics card with OpenGL 3.3",
+  "Windows 10 or 11, 64-bit; 64-bit Linux; or macOS 11 or later on an Apple Silicon or Intel Mac",
+  "A graphics card with OpenGL 3.3 (every Mac that runs macOS 11 has it)",
   "An internet connection to activate (or the offline page)",
-  "macOS: coming later",
 ]
 
 [[faq]]
