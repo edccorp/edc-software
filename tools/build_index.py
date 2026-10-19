@@ -82,6 +82,7 @@ HIDDEN_PRODUCTS = {
     "visibility_toolkit",
     "recon_calculations",
     "blendmotion",
+    "hve_testing",      # not a catalog product: the grant for HVE pre-release downloads
 } | set(filter(None, (os.environ.get("HIDDEN_PRODUCTS") or "").replace(" ", "").split(",")))
 
 PAGES_BASE = "https://extensions.edccorp.com"
@@ -952,6 +953,9 @@ def hve_downloads(release):
         digest = asset.get("digest") or ""
         out[name] = {
             "repo": HVE_REPO,
+            # A pre-release (v2027.0.0-alpha.1) is for testers only: the
+            # gateway streams it only to a key granted HVE_TESTING_PRODUCT.
+            "prerelease": bool(release.get("prerelease")),
             "asset_id": asset.get("id"),
             "size": asset.get("size", 0),
             "platform": platform or "checksums",

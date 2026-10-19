@@ -483,7 +483,7 @@ def test_the_two_restricted_lists_agree():
     gateway = (ROOT / "gateway" / "main.py").read_text()
     restricted = SOURCE.split("RESTRICTED_IDS = (", 1)[1].split(")", 1)[0]
     for pid in ("video_forensics_toolkit", "audio_forensics_toolkit",
-                "visibility_toolkit", "recon_calculations", "blendmotion"):
+                "visibility_toolkit", "recon_calculations", "blendmotion", "hve_testing"):
         assert pid in restricted, f"{pid} cannot be granted"
         assert pid in gateway, f"{pid} is not restricted by the gateway"
 

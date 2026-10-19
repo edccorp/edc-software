@@ -139,7 +139,7 @@ RESTRICTED_PRODUCTS = frozenset(
     p.strip() for p in os.environ.get(
         "RESTRICTED_PRODUCTS",
         "video_forensics_toolkit,audio_forensics_toolkit,visibility_toolkit,"
-        "recon_calculations,blendmotion",
+        "recon_calculations,blendmotion,hve_testing",
     ).split(",") if p.strip()
 )
 
@@ -439,7 +439,7 @@ async def admin_add_customer(request: Request):
     if isinstance(products, str):
         products = [p.strip() for p in products.split(",") if p.strip()]
     unknown = [p for p in products if p not in PRODUCT_IDS and p != "*"
-               and p not in licensing.HVE_FEATURES]
+               and p not in licensing.HVE_FEATURES and p != HVE_TESTING_PRODUCT]
     if unknown:
         raise HTTPException(
             status_code=400,
@@ -2081,7 +2081,10 @@ async def _stream_release_asset(repo: str, asset_id, filename: str, who: str,
 # Blender sends, so a GET shows a one-field form for the EDC Software key and
 # the POST streams the file; a script may still send the header. Any key on
 # file may download the program (hve-next docs/DISTRIBUTION.md, "What
-# ships"): running it is what the license gates, not having it. Only files
+# ships"): running it is what the license gates, not having it -- except a
+# PRE-release, a test build, which only a key that NAMES HVE_TESTING_PRODUCT
+# may fetch: a "*" grant does not reach it, whatever RESTRICTED_PRODUCTS
+# says, so every existing customer is kept off an alpha. Only files
 # the published page lists (hve-downloads.json, written from the newest
 # PUBLISHED hve-next release) can be fetched, so a draft never leaks.
 
@@ -2102,6 +2105,17 @@ EDC Blender tools.</p>
 <p class="muted">Lost your key? <a href="https://extensions.edccorp.com/recover">Have it
 emailed to you</a>. <a href="/">Back to HVE</a></p>
 </div>""").replace("<title>HVE license", "<title>HVE download")
+
+
+#: The grant a key needs to download an HVE pre-release, e.g. in the customer
+#: file: {"name": "HVE tester", "products": {"hve_testing": "2026-12-31"}}.
+HVE_TESTING_PRODUCT = "hve_testing"
+
+
+def _hve_tester(customer: dict) -> bool:
+    """Named outright and not expired: never through "*" or an alias."""
+    products = customer["products"]
+    return HVE_TESTING_PRODUCT in products and _active(products[HVE_TESTING_PRODUCT])
 
 
 async def _hve_download_entry(filename: str) -> dict:
@@ -2145,6 +2159,11 @@ async def _hve_download(filename: str, entry: dict, request: Request, secret: st
         _over_limit("fail", address)
         return HTMLResponse(_download_html(filename, "That key was not recognised. Check it "
                                            "and try again.", bad=True), 401)
-    who = _entitlements(raw)["name"]
-    return await _stream_release_asset(entry["repo"], entry["asset_id"], filename, who,
-                                       "hve", "application/octet-stream")
+    customer = _entitlements(raw)
+    if entry.get("prerelease") and not _hve_tester(customer):
+        # A real key, so not counted toward the lockout: it is simply not a tester's.
+        return HTMLResponse(_download_html(
+            filename, "This is a test build of HVE 2027, available to testers only. "
+            "Contact Engineering Dynamics Company if you should have access.", bad=True), 403)
+    return await _stream_release_asset(entry["repo"], entry["asset_id"], filename,
+                                       customer["name"], "hve", "application/octet-stream")

@@ -119,15 +119,27 @@ def test_page_text_is_escaped():
 SECRET = "edc_hve_download_secret"
 
 
-@pytest.fixture
-def gw(monkeypatch):
+PRE = dict(RELEASE, tag_name="v2027.0.0-alpha.1", prerelease=True,
+           assets=[{"name": "HVE-2027-2027.0.0-alpha.1-setup.exe", "id": 21,
+                    "size": 9_000_000, "digest": "sha256:" + "d" * 64}])
+PRE_EXE = "HVE-2027-2027.0.0-alpha.1-setup.exe"
+KEYS = {
+    SECRET: {"name": "Example Lab", "products": {"recon_toolkit": None}},
+    "edc_everything_label": "Old Customer",                  # a label: every product
+    "edc_everything_star": {"name": "Star Lab", "products": ["*"]},
+    "edc_tester": {"name": "HVE tester", "products": {"hve_testing": "2999-12-31"}},
+    "edc_tester_expired": {"name": "Former tester", "products": {"hve_testing": "2020-01-01"}},
+}
+
+
+def _gateway(monkeypatch, release):
     from fastapi.testclient import TestClient
 
     spec = importlib.util.spec_from_file_location("edc_gateway_hve_site",
                                                   ROOT / "gateway" / "main.py")
     main = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(main)
-    downloads = build_index.hve_downloads(RELEASE)
+    downloads = build_index.hve_downloads(release)
     origin = {"hve.html": b"<h1>HVE 2027 page</h1>",
               "assets/launch.html": b"<h1>extensions launch</h1>",
               "hve-downloads.json": json.dumps(downloads).encode()}
@@ -136,7 +148,7 @@ def gw(monkeypatch):
         return origin[path]
 
     async def tokens():
-        return {SECRET: {"name": "Example Lab", "products": {"recon_toolkit": None}}}
+        return KEYS
 
     streamed = []
 
@@ -151,6 +163,37 @@ def gw(monkeypatch):
     client = TestClient(main.app)
     client.streamed = streamed
     return client
+
+
+@pytest.fixture
+def gw(monkeypatch):
+    return _gateway(monkeypatch, RELEASE)
+
+
+@pytest.fixture
+def gw_pre(monkeypatch):
+    return _gateway(monkeypatch, PRE)
+
+
+def test_a_prerelease_downloads_only_with_a_named_unexpired_testing_grant(gw_pre):
+    # Every existing customer -- a label, a "*" grant, a product grant -- is
+    # kept off a test build, and is not counted toward the wrong-key lockout.
+    for key in (SECRET, "edc_everything_label", "edc_everything_star", "edc_tester_expired"):
+        r = gw_pre.post(f"/download/{PRE_EXE}", data={"secret": key}, headers=IP)
+        assert r.status_code == 403 and "testers only" in r.text, key
+    assert gw_pre.streamed == []
+    r = gw_pre.post(f"/download/{PRE_EXE}", data={"secret": "edc_tester"}, headers=IP)
+    assert r.status_code == 200 and r.content == b"file-bytes"
+    assert gw_pre.streamed == [("edccorp/hve-next", 21, PRE_EXE, "HVE tester", "hve")]
+    # The same refusal for a script sending the key as a Bearer header.
+    r = gw_pre.get(f"/download/{PRE_EXE}", headers={"authorization": f"Bearer {SECRET}"})
+    assert r.status_code == 403
+
+
+def test_a_final_release_still_downloads_with_any_key(gw):
+    for key in KEYS:
+        r = gw.post(f"/download/{EXE}", data={"secret": key}, headers=IP)
+        assert r.status_code == 200, key
 
 
 EXE = "HVE-2027-2027.1.0-setup.exe"
