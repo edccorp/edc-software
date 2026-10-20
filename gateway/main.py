@@ -2094,8 +2094,7 @@ def _download_html(filename: str, message: str = "", bad: bool = False) -> str:
     safe = html.escape(filename)
     return _offline_html(f"""<div class="card">
 <h1>Download {safe}</h1>
-<p class="muted">Enter your EDC Software key: the one that activates HVE and installs the
-EDC Blender tools.</p>
+<p class="muted">Enter your EDC Software key: the one that activates HVE.</p>
 {note}
 <form method="post" action="/download/{safe}">
 <label for="secret">Your EDC Software key</label>

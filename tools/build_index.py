@@ -1079,8 +1079,7 @@ footer .mark svg {{ height: 28px; width: auto; }}
 <div class="grid">
 {chr(10).join(cards)}
 </div>
-<p>Downloading needs your EDC Software key, the same one that installs the
-EDC Blender tools. Lost it? <a href="{RECOVER_URL}">Have it emailed to you</a>.</p>
+<p>Downloading needs your EDC Software key. Lost it? <a href="{RECOVER_URL}">Have it emailed to you</a>.</p>
 
 {whats_new}
 
