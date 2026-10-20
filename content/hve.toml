@@ -35,9 +35,13 @@ Each engine is licensed separately, and so is the EDC vehicle database. Your lic
 
 # Shown under "Requirements", one bullet each.
 requirements = [
-  "Windows 10 or 11, 64-bit; 64-bit Linux; or macOS 11 or later on an Apple Silicon or Intel Mac",
-  "A graphics card with OpenGL 3.3 (every Mac that runs macOS 11 has it)",
-  "An internet connection to activate (or the offline page)",
+  "Windows 10 or 11, 64-bit",
+  "macOS 11 Big Sur or later, on an Apple Silicon or Intel Mac",
+  "64-bit Linux with glibc 2.38 or later (Ubuntu 24.04, Debian 13, Fedora 39 or newer), with SDL2 and OpenGL libraries installed (for example: sudo apt install libsdl2-2.0-0)",
+  "A graphics card and driver with OpenGL 3.3: any Intel HD Graphics from about 2012 on, or any AMD or NVIDIA card from the last decade. Remote Desktop and some virtual machines do not provide it",
+  "Any 64-bit Intel or AMD processor, or Apple Silicon; more cores make DyMESH collisions faster",
+  "8 GB of memory at least; 16 GB recommended for large point clouds, detailed vehicle meshes or multi-event cases",
+  "An internet connection to activate, and at least once every 60 days (or the offline page)",
 ]
 
 [[faq]]
