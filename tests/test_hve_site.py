@@ -252,7 +252,11 @@ def test_the_page_carries_edc_and_hve_branding():
     page = build_index.render_hve_page(content(), None, {})
     # The EDC name lockup and mark are inlined in currentColor, so dark mode
     # can lighten them; maroon on a dark page all but disappears.
-    assert page.count("<svg") == 2 and "ENGINEERING" in page
+    # The design of extensions.edccorp.com's launch page: the lockup in the
+    # footer, the company named over the hero, and a way back to edccorp.com.
+    assert page.count("<svg") == 1 and "ENGINEERING" in page
+    assert "Engineering Dynamics Company</p>" in page and "Back to edccorp.com" in page
+    assert ">EDC Blender Extensions</a>" in page
     assert "#6b0739\"" not in page.split("<style>", 1)[1].split("</style>", 1)[1]
     assert 'src="assets/hve-cube.svg"' in page and 'rel="icon" href="assets/hve-cube.svg"' in page
 

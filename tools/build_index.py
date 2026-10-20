@@ -1028,96 +1028,199 @@ def render_hve_page(c, release, downloads):
     requirements = "\n".join(f"<li>{html.escape(r)}</li>" for r in c.get("requirements", []))
     faq = "\n".join(f"<h3>{html.escape(q.get('q', ''))}</h3>\n{paragraphs(q.get('a', ''))}"
                     for q in c.get("faq", []))
+    # The same design as extensions.edccorp.com's launch page
+    # (content/assets/launch.html): its palette, light and dark, the centered
+    # hero over a faint crosshair, pill buttons and white rounded panels, so
+    # the two EDC sites read as one family.
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{esc('name')} — Engineering Dynamics Company</title>
+<meta name="description" content="{esc('tagline')}">
 <link rel="icon" href="assets/hve-cube.svg" type="image/svg+xml">
-<style>{SHARED_CSS}{DETAIL_CSS}
-:root {{ --accent: #6b0739; --brand: #6b0739; }}
-@media (prefers-color-scheme: dark) {{ :root {{ --accent: #e0a3b6; --brand: #e0a3b6; }}
-  a.btn:not(.ghost) {{ color: #2a0716; }} }}
-.topbar {{ display: flex; align-items: center; justify-content: space-between; gap: 1rem;
-          padding: 1.1rem 0 .9rem; border-bottom: 1px solid var(--border); }}
-.topbar .lockup {{ color: var(--brand); display: block; line-height: 0; }}
-.topbar .lockup svg {{ height: 44px; width: auto; }}
-.topbar nav {{ display: flex; gap: 1.2rem; font-size: .95rem; flex-wrap: wrap; }}
-.cube {{ width: 100%; max-width: 230px; display: block; margin: 0 auto; }}
-@media (max-width: 720px) {{ .topbar .lockup svg {{ height: 36px; }}
-  .topbar nav {{ display: none; }} .cube {{ max-width: 140px; }} }}
-footer .mark {{ color: var(--brand); display: inline-block; line-height: 0; margin-bottom: .5rem; }}
-footer .mark svg {{ height: 28px; width: auto; }}
-.dl h3 {{ margin-bottom: .1rem; }}
-.dl .sha {{ font-size: .72rem; opacity: .7; overflow-wrap: anywhere; margin: 0 0 .7rem; }}
-.dl .sha code {{ background: none; padding: 0; }}
-.soon {{ opacity: .65; font-style: italic; }}
-</style>
+<style>{HVE_CSS}</style>
 </head>
 <body>
-<main>
-<header class="topbar">
-  <a class="lockup" href="https://www.edccorp.com">{_brand_svg("edc-lockup.svg")}</a>
-  <nav><a href="#download">Download</a><a href="#licensing">Licensing</a>
-  <a href="#support">Support</a><a href="{PAGES_BASE}/">EDC Software</a></nav>
-</header>
-<div class="phero">
-  <div>
-    <span class="badge">{badge}</span>
-    <h1>{esc('name')}</h1>
-    <p class="tagline">{esc('tagline')}</p>
-    {paragraphs(c.get('pitch', ''))}
-    <div class="actions"><a class="btn" href="#download">Download</a>
-    <a class="btn ghost" href="#licensing">Licensing</a></div>
-  </div>
-  <div><img class="cube" src="assets/hve-cube.svg" alt="HVE"></div>
-</div>
+<nav class="topnav">
+  <a href="https://www.edccorp.com">&larr; Back to edccorp.com</a>
+  <span class="links"><a href="#download">Download</a><a href="#licensing">Licensing</a><a
+  href="#support">Support</a><a href="{PAGES_BASE}/">EDC Blender Extensions</a></span>
+</nav>
 
-<h2 id="download">Download</h2>
+<header class="hero">
+  <div class="wrap">
+    <img class="cube rise" src="assets/hve-cube.svg" alt="HVE">
+    <p class="eyebrow rise d1">Engineering Dynamics Company</p>
+    <h1 class="rise d1">{esc('name')}</h1>
+    <p class="rise d1"><span class="badge">{badge}</span></p>
+    <p class="lede rise d2">{esc('tagline')}</p>
+    <div class="cta rise d3">
+      <a class="btn" href="#download">Download</a>
+      <a class="btn ghost" href="#licensing">Licensing</a>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+<section class="panel intro rise d4">
+{paragraphs(c.get('pitch', ''))}
+</section>
+
+<section class="panel" id="download">
+<h2>Download</h2>
 {status}
 <div class="grid">
 {chr(10).join(cards)}
 </div>
-<p>Downloading needs your EDC Software key. Lost it? <a href="{RECOVER_URL}">Have it emailed to you</a>.</p>
+<p class="sub">Downloading needs your EDC Software key. Lost it? <a href="{RECOVER_URL}">Have it emailed to you</a>.</p>
+</section>
 
-{whats_new}
+{f'<section class="panel">{whats_new}</section>' if whats_new else ''}
 
+<section class="panel">
 <h2>Capabilities</h2>
 <ul class="checks">
 {features}
 </ul>
+</section>
 
-<h2 id="licensing">Licensing</h2>
+<section class="panel" id="licensing">
+<h2>Licensing</h2>
 {paragraphs(c.get('licensing', ''))}
 <p><a href="{OFFLINE_URL}">Activate a computer without internet, or release one you no
-longer have →</a></p>
+longer have &rarr;</a></p>
+</section>
 
+<section class="panel">
 <h2>Requirements</h2>
-<ul>
+<ul class="plain">
 {requirements}
 </ul>
+</section>
 
+<section class="panel faq">
 <h2>Questions</h2>
-<div class="faq">
 {faq}
-</div>
+</section>
 
-<h2 id="support">Support</h2>
+<section class="panel" id="support">
+<h2>Support</h2>
 <p>HVE is developed and supported by <strong>Engineering Dynamics Company</strong>.
 Visit <a href="https://www.edccorp.com">edccorp.com</a> or contact EDC support for
 licensing, training and assistance.</p>
+</section>
+</main>
 
 <footer>
-<a class="mark" href="https://www.edccorp.com">{_brand_svg("edc-mark.svg")}</a><br>
-© Engineering Dynamics Company. Blender® is a registered trademark of the
-Blender Foundation.
+  <div class="wrap">
+    <a class="mark" href="https://www.edccorp.com" aria-label="Engineering Dynamics Company">{_brand_svg("edc-lockup.svg")}</a>
+    <p>&copy; <a href="https://www.edccorp.com">Engineering Dynamics Company</a> &middot;
+      <a href="{HVE_BASE}/">hve.edccorp.com</a> &middot;
+      <a href="{PAGES_BASE}/">EDC Blender Extensions</a></p>
+  </div>
 </footer>
-</main>
 </body>
 </html>
 """
 
+
+#: The HVE page's stylesheet: extensions.edccorp.com's launch page
+#: (content/assets/launch.html) -- the same variables, light and dark, and the
+#: same hero, buttons and panels -- plus what only this page has (the
+#: download cards, notices, release notes and lists).
+HVE_CSS = """
+:root { --bg:#f4eff1; --panel:#ffffff; --tile:#0d0a0c;
+  --ink:#211a1d; --muted:#6b5f64; --line:rgba(107,36,64,.16);
+  --accent:#6b2440; --accent-ink:#6b2440; --spark:#c15a13;
+  --chip-bg:rgba(107,36,64,.08);
+  --shadow:0 1px 2px rgba(40,20,30,.05), 0 12px 34px -18px rgba(40,20,30,.28); }
+@media (prefers-color-scheme: dark) { :root {
+  --bg:#141013; --panel:#1b1519; --tile:#0b090a;
+  --ink:#ece5e8; --muted:#a5969c; --line:rgba(217,138,160,.15);
+  --accent:#d98aa0; --accent-ink:#e7a7ba; --spark:#e2731b;
+  --chip-bg:rgba(217,138,160,.12);
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 18px 40px -20px rgba(0,0,0,.7); } }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink);
+  font-family:"Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  line-height:1.6; -webkit-font-smoothing:antialiased; }
+a { color:var(--accent-ink); }
+.wrap { max-width:1060px; margin:0 auto; padding:0 1.25rem; }
+.topnav { max-width:1060px; margin:0 auto; padding:1.2rem 1.25rem .2rem; display:flex;
+  justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap; }
+.topnav a { color:var(--muted); font-size:.9rem; font-weight:600; text-decoration:none; }
+.topnav a:hover { color:var(--accent-ink); }
+.topnav .links { display:flex; gap:1.2rem; flex-wrap:wrap; }
+.hero { position:relative; overflow:hidden; padding:2.6rem 0 2.2rem; text-align:center; }
+.hero::before { content:""; position:absolute; inset:-40% 0 auto 0; height:150%; pointer-events:none;
+  background:
+    radial-gradient(120% 80% at 50% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 60%),
+    linear-gradient(var(--line), var(--line)) 50% 42% / 100% 1px no-repeat,
+    linear-gradient(var(--line), var(--line)) 50% 30% / 1px 30% no-repeat;
+  opacity:.9; }
+.hero > .wrap > * { position:relative; z-index:1; }
+.cube { width:min(150px,40%); display:block; margin:0 auto 1rem; }
+.eyebrow { margin:0 0 .8rem; font-size:.72rem; font-weight:700; letter-spacing:.26em;
+  text-transform:uppercase; color:var(--accent-ink); }
+h1 { margin:0 auto; font-size:clamp(2.3rem,6vw,4rem); line-height:1.02; letter-spacing:-.02em;
+  font-weight:800; text-wrap:balance; }
+.badge { display:inline-block; margin-top:.9rem; font-size:.82rem; font-weight:700;
+  color:var(--accent-ink); background:var(--chip-bg); border:1px solid var(--line);
+  border-radius:999px; padding:.15rem .7rem; }
+.lede { margin:1rem auto 0; max-width:58ch; font-size:1.12rem; color:var(--muted); text-wrap:pretty; }
+.cta { display:flex; gap:.75rem; justify-content:center; flex-wrap:wrap; margin-top:1.8rem; }
+.btn { display:inline-flex; align-items:center; gap:.4rem; padding:.72rem 1.25rem;
+  border-radius:999px; font-weight:650; font-size:.95rem; border:1px solid var(--accent);
+  background:var(--accent); color:#fff; text-decoration:none;
+  transition:transform .15s ease, box-shadow .15s ease, background .15s; }
+.btn:hover { transform:translateY(-2px); box-shadow:0 10px 22px -12px var(--accent); }
+.btn.ghost { background:transparent; color:var(--accent-ink); }
+.btn.ghost:hover { background:var(--chip-bg); box-shadow:none; }
+@media (prefers-color-scheme: dark) { .btn:not(.ghost) { color:#2a0716; } }
+.panel { margin:1.4rem 0; background:var(--panel); border:1px solid var(--line);
+  border-radius:18px; padding:1.6rem 1.8rem; box-shadow:var(--shadow); }
+.panel h2 { margin:0 0 .6rem; font-size:1.35rem; letter-spacing:-.01em; }
+.panel h3 { margin:1.1rem 0 .2rem; font-size:1.05rem; }
+.panel p, .panel li { color:var(--muted); }
+.panel strong { color:var(--ink); }
+.panel p a { text-decoration:underline; text-underline-offset:.15em; font-weight:600; }
+.intro p { font-size:1.05rem; }
+.sub { margin:1rem 0 0; }
+.notice { margin:.8rem 0 1rem; padding:.9rem 1.1rem; border-radius:12px;
+  background:var(--chip-bg); border:1px solid var(--line); border-left:4px solid var(--accent); }
+.grid { display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; margin-top:1rem; }
+@media (max-width:820px) { .grid { grid-template-columns:1fr; } }
+.card.dl { background:var(--bg); border:1px solid var(--line); border-radius:14px;
+  padding:1.1rem 1.2rem; display:flex; flex-direction:column; gap:.3rem; }
+.card.dl h3 { margin:0; font-size:1.15rem; color:var(--ink); }
+.card.dl .meta { color:var(--muted); font-size:.88rem; }
+.card.dl .sha { font-size:.72rem; overflow-wrap:anywhere; margin:.2rem 0 .4rem; }
+.card.dl .sha code { background:none; padding:0; }
+.card.dl .actions { margin-top:auto; padding-top:.4rem; }
+.card.dl .btn { padding:.5rem 1rem; font-size:.9rem; }
+.soon { color:var(--muted); font-style:italic; }
+ul.checks, ul.plain { margin:.4rem 0 0; padding:0; list-style:none; display:grid; gap:.45rem; }
+ul.checks { grid-template-columns:repeat(2,1fr); }
+@media (max-width:720px) { ul.checks { grid-template-columns:1fr; } }
+ul.checks li, ul.plain li { position:relative; padding-left:1.6rem; }
+ul.checks li::before { content:"\\2713"; position:absolute; left:0; color:var(--accent-ink); font-weight:700; }
+ul.plain li::before { content:""; position:absolute; left:.35rem; top:.7em; width:.4rem; height:.4rem;
+  border-radius:50%; background:var(--accent); }
+.notes { color:var(--muted); }
+.notes p, .notes li { color:var(--muted); }
+footer { text-align:center; color:var(--muted); font-size:.9rem; padding:2.5rem 0 3.5rem;
+  border-top:1px solid var(--line); margin-top:2.5rem; }
+footer a { color:var(--accent-ink); font-weight:600; text-decoration:none; }
+footer .mark { display:inline-block; color:var(--accent); line-height:0; margin-bottom:.6rem; }
+footer .mark svg { height:40px; width:auto; }
+.rise { opacity:0; transform:translateY(14px); animation:rise .7s cubic-bezier(.2,.7,.2,1) forwards; }
+.d1{animation-delay:.05s} .d2{animation-delay:.14s} .d3{animation-delay:.22s} .d4{animation-delay:.30s}
+@keyframes rise { to { opacity:1; transform:none; } }
+@media (prefers-reduced-motion:reduce) { .rise { animation:none; opacity:1; transform:none; } .btn { transition:none; } }
+a:focus-visible, .btn:focus-visible { outline:2px solid var(--accent-ink); outline-offset:3px; border-radius:8px; }
+"""
 
 def write_hve_site(out_dir):
     """hve.html and hve-downloads.json. The page is written with or without a
