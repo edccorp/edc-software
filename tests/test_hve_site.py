@@ -31,9 +31,9 @@ RELEASE = {
     "published_at": "2027-01-15T12:00:00Z",
     "body": "## Changes\n- First release",
     "assets": [
-        {"name": "HVE-2027-2027.1.0-setup.exe", "id": 11, "size": 9_000_000,
+        {"name": "HVEStudio-2027.1.0-setup.exe", "id": 11, "size": 9_000_000,
          "digest": "sha256:" + "a" * 64},
-        {"name": "HVE-2027-2027.1.0-linux-x86_64.tar.gz", "id": 12, "size": 12_000_000,
+        {"name": "HVEStudio-2027.1.0-linux-x86_64.tar.gz", "id": 12, "size": 12_000_000,
          "digest": "sha256:" + "b" * 64},
         {"name": "SHA256SUMS.txt", "id": 13, "size": 200},
         {"name": "ctest.log", "id": 14, "size": 5000},
@@ -60,8 +60,8 @@ def test_a_release_lists_each_platform_its_size_and_checksum():
     downloads = build_index.hve_downloads(RELEASE)
     page = build_index.render_hve_page(content(), RELEASE, downloads)
     assert "Version 2027.1.0" in page and "released 2027-01-15" in page
-    assert "https://hve.edccorp.com/download/HVE-2027-2027.1.0-setup.exe" in page
-    assert "https://hve.edccorp.com/download/HVE-2027-2027.1.0-linux-x86_64.tar.gz" in page
+    assert "https://hve.edccorp.com/download/HVEStudio-2027.1.0-setup.exe" in page
+    assert "https://hve.edccorp.com/download/HVEStudio-2027.1.0-linux-x86_64.tar.gz" in page
     assert "a" * 64 in page and "b" * 64 in page
     assert "9 MB" in page and "12 MB" in page
     assert "SHA256SUMS.txt" in page
@@ -71,10 +71,10 @@ def test_a_release_lists_each_platform_its_size_and_checksum():
 
 def test_only_platform_files_and_the_checksums_are_downloadable():
     downloads = build_index.hve_downloads(RELEASE)
-    assert set(downloads) == {"HVE-2027-2027.1.0-setup.exe",
-                              "HVE-2027-2027.1.0-linux-x86_64.tar.gz", "SHA256SUMS.txt"}
-    assert downloads["HVE-2027-2027.1.0-setup.exe"]["platform"] == "windows"
-    assert downloads["HVE-2027-2027.1.0-setup.exe"]["sha256"] == "a" * 64
+    assert set(downloads) == {"HVEStudio-2027.1.0-setup.exe",
+                              "HVEStudio-2027.1.0-linux-x86_64.tar.gz", "SHA256SUMS.txt"}
+    assert downloads["HVEStudio-2027.1.0-setup.exe"]["platform"] == "windows"
+    assert downloads["HVEStudio-2027.1.0-setup.exe"]["sha256"] == "a" * 64
     assert all(d["repo"] == "edccorp/hve-next" for d in downloads.values())
 
 
@@ -96,13 +96,13 @@ def test_a_draft_release_never_reaches_the_page(monkeypatch, tmp_path):
 def test_a_prerelease_is_badged_by_its_stage_and_says_it_is_a_test_build():
     pre = dict(RELEASE, tag_name="v2027.0.0-alpha.1", prerelease=True,
                assets=RELEASE["assets"] + [
-                   {"name": "HVE-2027-2027.0.0-alpha.1-macos.dmg", "id": 15,
+                   {"name": "HVEStudio-2027.0.0-alpha.1-macos.dmg", "id": 15,
                     "size": 23_000_000, "digest": "sha256:" + "c" * 64}])
     page = build_index.render_hve_page(content(), pre, build_index.hve_downloads(pre))
     assert '<span class="badge">Alpha</span>' in page
     assert "Test build." in page and "Run anyway" in page and "right-click" in page
     assert "Version 2027.0.0-alpha.1" in page
-    assert "/download/HVE-2027-2027.0.0-alpha.1-macos.dmg" in page
+    assert "/download/HVEStudio-2027.0.0-alpha.1-macos.dmg" in page
     assert "Not available yet" not in page        # all three platforms offered
     final = build_index.render_hve_page(content(), RELEASE, build_index.hve_downloads(RELEASE))
     assert "Test build." not in final
@@ -120,9 +120,9 @@ SECRET = "edc_hve_download_secret"
 
 
 PRE = dict(RELEASE, tag_name="v2027.0.0-alpha.1", prerelease=True,
-           assets=[{"name": "HVE-2027-2027.0.0-alpha.1-setup.exe", "id": 21,
+           assets=[{"name": "HVEStudio-2027.0.0-alpha.1-setup.exe", "id": 21,
                     "size": 9_000_000, "digest": "sha256:" + "d" * 64}])
-PRE_EXE = "HVE-2027-2027.0.0-alpha.1-setup.exe"
+PRE_EXE = "HVEStudio-2027.0.0-alpha.1-setup.exe"
 KEYS = {
     SECRET: {"name": "Example Lab", "products": {"recon_toolkit": None}},
     "edc_everything_label": "Old Customer",                  # a label: every product
@@ -140,7 +140,7 @@ def _gateway(monkeypatch, release):
     main = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(main)
     downloads = build_index.hve_downloads(release)
-    origin = {"hve.html": b"<h1>HVE 2027 page</h1>",
+    origin = {"hve.html": b"<h1>HVE Studio page</h1>",
               "assets/launch.html": b"<h1>extensions launch</h1>",
               "hve-downloads.json": json.dumps(downloads).encode()}
 
@@ -196,15 +196,15 @@ def test_a_final_release_still_downloads_with_any_key(gw):
         assert r.status_code == 200, key
 
 
-EXE = "HVE-2027-2027.1.0-setup.exe"
+EXE = "HVEStudio-2027.1.0-setup.exe"
 IP = {"x-forwarded-for": "198.51.100.1, 203.0.113.9"}
 
 
 def test_hve_host_serves_the_hve_page_and_others_the_launch_page(gw):
-    assert "HVE 2027 page" in gw.get("/", headers={"host": "hve.edccorp.com"}).text
-    assert "HVE 2027 page" in gw.get("/", headers={"host": "HVE.edccorp.com:443"}).text
+    assert "HVE Studio page" in gw.get("/", headers={"host": "hve.edccorp.com"}).text
+    assert "HVE Studio page" in gw.get("/", headers={"host": "HVE.edccorp.com:443"}).text
     assert "extensions launch" in gw.get("/", headers={"host": "extensions.edccorp.com"}).text
-    assert "HVE 2027 page" in gw.get("/hve", headers={"host": "extensions.edccorp.com"}).text
+    assert "HVE Studio page" in gw.get("/hve", headers={"host": "extensions.edccorp.com"}).text
 
 
 def test_a_browser_is_asked_for_its_key(gw):
@@ -215,7 +215,7 @@ def test_a_browser_is_asked_for_its_key(gw):
 
 
 def test_only_listed_files_can_be_downloaded(gw):
-    for name in ("ctest.log", "HVE-2027-2027.2.0-setup.exe", "..%2Fhve.html"):
+    for name in ("ctest.log", "HVEStudio-2027.2.0-setup.exe", "..%2Fhve.html"):
         assert gw.get(f"/download/{name}").status_code == 404
         assert gw.post(f"/download/{name}", data={"secret": SECRET}).status_code == 404
     assert gw.streamed == []

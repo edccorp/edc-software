@@ -4,13 +4,13 @@
 # published release the page says downloads open at release, so this file can
 # be live before HVE ships.
 
-name = "HVE 2027"
+name = "HVE Studio"
 badge = "Preview"
 # Shown when the newest release is a PRE-release (its badge is then the stage
 # from the tag: "Alpha", "Beta").
-prerelease_note = "This version is for testing and is not yet a supported release, and only testers' keys can download it. Windows asks before running it the first time: choose More info, then Run anyway. On a Mac, open the disk image, drag HVE 2027 to Applications, then the first time right-click it and choose Open. Please report anything that goes wrong to Engineering Dynamics Company."
+prerelease_note = "This version is for testing and is not yet a supported release, and only testers' keys can download it. Windows asks before running it the first time: choose More info, then Run anyway. On a Mac, open the disk image, drag HVE Studio to Applications, then the first time right-click it and choose Open. Please report anything that goes wrong to Engineering Dynamics Company."
 tagline = "Human · Vehicle · Environment simulation, rebuilt for today's computers."
-pitch = """HVE 2027 is the next major version of HVE, the physics-based simulation environment from Engineering Dynamics Company for reconstructing and simulating vehicle crashes and occupant motion. It runs the same EDC engines classic HVE runs, from the same physics source, in a new 3-D interface.
+pitch = """HVE Studio is the next major version of HVE, the physics-based simulation environment from Engineering Dynamics Company for reconstructing and simulating vehicle crashes and occupant motion. It runs the same EDC engines classic HVE runs, from the same physics source, in a new 3-D interface.
 
 It installs beside classic HVE rather than over it, so you can run both while you move your work across."""
 
@@ -42,7 +42,7 @@ requirements = [
 
 [[faq]]
 q = "Does it replace classic HVE?"
-a = "Not yet. HVE 2027 installs in its own folder, uses its own .hvex case format, and never takes over the .hve file type, so classic HVE keeps working beside it. Open a classic case in HVE 2027 with File → Import."
+a = "Not yet. HVE Studio installs in its own folder, uses its own .hvex case format, and never takes over the .hve file type, so classic HVE keeps working beside it. Open a classic case in HVE Studio with File → Import."
 
 [[faq]]
 q = "How do I get a key?"

@@ -2163,7 +2163,7 @@ async def _hve_download(filename: str, entry: dict, request: Request, secret: st
     if entry.get("prerelease") and not _hve_tester(customer):
         # A real key, so not counted toward the lockout: it is simply not a tester's.
         return HTMLResponse(_download_html(
-            filename, "This is a test build of HVE 2027, available to testers only. "
+            filename, "This is a test build of HVE Studio, available to testers only. "
             "Contact Engineering Dynamics Company if you should have access.", bad=True), 403)
     return await _stream_release_asset(entry["repo"], entry["asset_id"], filename,
                                        customer["name"], "hve", "application/octet-stream")

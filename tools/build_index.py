@@ -896,7 +896,7 @@ def render_support_page(c):
 """
 
 
-# ---------------------------------------------------------------- HVE 2027
+# ---------------------------------------------------------------- HVE Studio
 #
 # hve.edccorp.com: HVE's own landing page and downloads. The gateway serves it
 # as "/" for that host (and at /hve on any host). The release comes from
@@ -1020,7 +1020,7 @@ def render_hve_page(c, release, downloads):
         whats_new = f'<h2>What’s new</h2>\n<div class="notes">{notes}</div>' if notes else ""
     else:
         status = ('<div class="notice"><strong>Downloads open at release.</strong> '
-                  'HVE 2027 is in testing; this page will offer it here as soon as it is '
+                  'HVE Studio is in testing; this page will offer it here as soon as it is '
                   'released.</div>')
         whats_new = ""
 
