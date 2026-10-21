@@ -55,6 +55,13 @@ Blender notifies you when updates are available.
 - Products whose latest release zip contains no manifest (releases cut
   before extension support) are skipped with a log message and appear
   automatically once a new release is published.
+- **The publish refuses to drop a product.** Before writing anything, the
+  build compares its products with the live index and fails the run if
+  any would disappear, or if it read none at all. Pages then keeps serving
+  the last good index. A revoked or expired `PRODUCTS_TOKEN` used to skip
+  every product and publish an empty index, so every customer's Blender
+  listed nothing. To remove a product on purpose, run **Publish extensions
+  index** by hand with **Allow Drop** ticked.
 
 To publish instantly from a product repo instead of waiting for the
 schedule, send a `repository_dispatch` event (type `product-release`) to

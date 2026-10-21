@@ -16,6 +16,13 @@ on:
     # (type: product-release) — see tools/notify-extensions.md.
     - cron: "17 * * * *"
   workflow_dispatch:
+    inputs:
+      allow_drop:
+        description: >-
+          Publish even if a product would disappear from the live index
+          (only when removing a product on purpose)
+        type: boolean
+        default: false
   repository_dispatch:
     types: [product-release]
   push:
@@ -65,6 +72,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.PRODUCTS_TOKEN || github.token }}
           MIRROR_ZIPS: "0"
+          # The build refuses to publish an index that would drop a product
+          # the live one has (a dead token used to publish an empty one).
+          ALLOW_DROP: ${{ inputs.allow_drop && 'true' || 'false' }}
         run: python tools/build_index.py site
 
       - name: Configure GitHub Pages

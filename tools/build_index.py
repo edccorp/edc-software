@@ -1243,10 +1243,66 @@ def write_hve_site(out_dir):
     return True
 
 
+#: The index currently live, read before a publish to see what it would
+#: drop. The Pages origin the gateway serves from, not the custom domain:
+#: that one wants a repository secret and goes down with the gateway.
+PREVIOUS_INDEX_URL = os.environ.get(
+    "PREVIOUS_INDEX_URL", "https://edccorp.github.io/edc-software/index.json")
+
+
+def _previous_ids():
+    """Extension ids in the live index, or None if it cannot be read.
+
+    Fetched without the products token: it is public, and the token has no
+    business going to any host but the GitHub API.
+    """
+    try:
+        with urllib.request.urlopen(PREVIOUS_INDEX_URL, timeout=30) as resp:
+            data = json.loads(resp.read())
+    except Exception as exc:  # noqa: BLE001 -- unreadable means "no comparison", not a failure
+        print(f"WARN cannot read the live index ({PREVIOUS_INDEX_URL}): {exc}; "
+              f"only the empty-index check applies")
+        return None
+    return {e.get("id") for e in data.get("data", []) if isinstance(e, dict) and e.get("id")}
+
+
+def publish_problem(entries, previous_ids, allow_drop=False):
+    """Why this build must not be published, or None if it may be.
+
+    A product whose release cannot be read is skipped, not fatal, and the
+    index used to be published regardless. A token that stops working then
+    skips every product, and the next hourly run replaced the live index
+    with an empty one: every customer's Blender lists nothing. So a build
+    that would drop a product the live index has is refused, and the live
+    index stays as it is until the cause is fixed. A product removed on
+    purpose goes out with a manual run and Allow Drop ticked.
+    """
+    ids = {e.get("id") for e in entries if e.get("id")}
+    if not ids:
+        return ("no product release could be read, so the index would be empty. "
+                "Check the PRODUCTS_TOKEN secret: a revoked or expired token skips "
+                "every product.")
+    if previous_ids and not allow_drop:
+        missing = sorted(previous_ids - ids)
+        if missing:
+            return (f"{', '.join(missing)} would disappear from the live index. "
+                    f"If a token or a release is the cause, fix it and the next run "
+                    f"publishes; if the removal is intended, run the workflow by "
+                    f"hand with Allow Drop ticked.")
+    return None
+
+
 def main():
     out_dir = sys.argv[1] if len(sys.argv) > 1 else "site"
     os.makedirs(out_dir, exist_ok=True)
     entries, packages, releases = build_entries(out_dir)
+    allow_drop = os.environ.get("ALLOW_DROP", "").strip().lower() in ("1", "true", "yes")
+    problem = publish_problem(entries, _previous_ids(), allow_drop)
+    if problem:
+        # Exit before anything is written: the workflow fails at this step,
+        # nothing is deployed, and Pages keeps serving the last good index.
+        print(f"REFUSING TO PUBLISH: {problem}")
+        sys.exit(1)
     content = load_products_content()
     support = load_support_content()
     index = {"version": "v1", "blocklist": [], "data": entries}
