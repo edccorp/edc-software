@@ -159,8 +159,8 @@ def test_malformed_machine_rows_are_skipped_not_fatal():
 def test_claims_carry_the_document_hve_reads():
     e = entry()
     machine, _ = licensing.activate(e, FP, "LAB-1", "2027.1", NOW)
-    c = licensing.claims(SECRET, e, e["products"], machine, "2026a", NOW)
-    assert c["v"] == 1 and c["kid"] == "2026a"
+    c = licensing.claims(SECRET, e, e["products"], machine, "2026b", NOW)
+    assert c["v"] == 1 and c["kid"] == "2026b"
     assert c["features"] == ["hve", "simon"]
     assert c["maintenance_until"] == "2027-10-01"
     assert c["fingerprint"] == FP and c["activation"] == machine["id"]
@@ -388,7 +388,7 @@ def test_without_a_signing_key_every_endpoint_says_so(gw):
 def test_healthz_shows_the_public_key_fingerprint_and_never_the_key(gw):
     body = gw.get("/healthz").json()
     assert body["license_signing"] == {
-        "kid": "2026a", "public_key": licensing.public_key_fingerprint(KEY)}
+        "kid": "2026b", "public_key": licensing.public_key_fingerprint(KEY)}
     assert "PRIVATE" not in json.dumps(body)
 
 

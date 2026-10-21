@@ -89,7 +89,7 @@ def _listing(client, secret, **headers):
 
 def test_the_list_is_signed_by_the_update_key_and_names_its_kid(gw):
     doc = _listing(gw, "edc_full")
-    assert doc["v"] == 1 and doc["kid"] == "upd-2026a"
+    assert doc["v"] == 1 and doc["kid"] == "upd-2026b"
     assert [d["version"] for d in doc["data"]] == ["2026.11", "2026.10"]
     assert doc["data"][0] == {
         "pack": "edc-vehicles", "version": "2026.11", "feature": "edcdb",

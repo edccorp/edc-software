@@ -62,12 +62,12 @@ Environment variables:
                      licenses; the /v1 endpoints answer 503 without it
     UPDATE_SIGNING_KEY  the Ed25519 private key (PEM) that signs the HVE
                      update list (/v1/updates); kid UPDATE_KEY_ID (default
-                     upd-2026a). Never the license key: HVE trusts each
+                     upd-2026b). Never the license key: HVE trusts each
                      only for its own document
     HVE_DATA_REPO    "owner/repo" whose published "data-<version>" releases
                      carry the EDC vehicle data packs (default
                      edccorp/hve-next), read with GH_TOKEN
-    LICENSE_KEY_ID   the key's name in each license (default 2026a); HVE
+    LICENSE_KEY_ID   the key's name in each license (default 2026b); HVE
                      trusts a license only under a kid it knows
 """
 
@@ -113,7 +113,7 @@ except json.JSONDecodeError as exc:
     STRIPE_PRICES = {}
     PRICES_ERROR = f"STRIPE_PRICES is not valid JSON: {exc}"
     print(f"[gateway] ERROR: {PRICES_ERROR}")
-LICENSE_KEY_ID = os.environ.get("LICENSE_KEY_ID", "2026a").strip() or "2026a"
+LICENSE_KEY_ID = os.environ.get("LICENSE_KEY_ID", "2026b").strip() or "2026b"
 try:
     LICENSE_KEY = (licensing.load_signing_key(os.environ["LICENSE_SIGNING_KEY"])
                    if os.environ.get("LICENSE_SIGNING_KEY", "").strip() else None)
@@ -123,7 +123,7 @@ except Exception as exc:  # noqa: BLE001 -- any parse failure is the same answer
     # The exception's text, never the variable's: it holds the private key.
     LICENSE_KEY_ERROR = f"LICENSE_SIGNING_KEY could not be read: {type(exc).__name__}"
     print(f"[gateway] ERROR: {LICENSE_KEY_ERROR}")
-UPDATE_KEY_ID = os.environ.get("UPDATE_KEY_ID", "upd-2026a").strip() or "upd-2026a"
+UPDATE_KEY_ID = os.environ.get("UPDATE_KEY_ID", "upd-2026b").strip() or "upd-2026b"
 try:
     UPDATE_KEY = (licensing.load_signing_key(os.environ["UPDATE_SIGNING_KEY"])
                   if os.environ.get("UPDATE_SIGNING_KEY", "").strip() else None)

@@ -442,16 +442,23 @@ out for ten minutes.
 
 **Variables**
 
-- `LICENSE_SIGNING_KEY`: the whole text of `hve-license-2026a.pem`, including
+- `LICENSE_SIGNING_KEY`: the whole text of `hve-license-2026b.key`, including
   the BEGIN and END lines. Without it the four endpoints answer 503. The
   private key never goes in a repository.
 - `LICENSE_KEY_ID`: the key's name, written into every license (default
-  `2026a`). HVE accepts a license only under a name it knows.
+  `2026b`). HVE accepts a license only under a name it knows.
+- `UPDATE_SIGNING_KEY` / `UPDATE_KEY_ID`: the same for the update list
+  (`hve-update-2026b.key`, default `upd-2026b`). Never the license key.
 
-`/healthz` shows `license_signing.public_key`, the first 16 hex of the
-public key's SHA-256. It must match the figure in hve-next's
-`licensing/keys/README.md` (`a32897b6e29d25ed` for `2026a`). If it does not,
-the key in Railway is the wrong one.
+`/healthz` shows `license_signing.public_key` and `update_signing.public_key`,
+the first 16 hex of each public key's SHA-256. They must match the figures in
+hve-next's `licensing/keys/README.md`: `3c114ed2f96b59a0` for `2026b` and
+`81c404da857abbbe` for `upd-2026b`. If one does not, the key in Railway is the
+wrong one.
+
+`2026a` and `upd-2026a` were retired on 2026-10-21, when Railway disclosed that
+customer environment variables may have been read; no HVE build after
+1.0.0-alpha.2 trusts them, and they must never be put back.
 
 **On the customer entry**
 
