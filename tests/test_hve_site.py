@@ -268,3 +268,11 @@ def test_brand_assets_are_valid_svg_the_gateway_serves(name):
     doc = xml.dom.minidom.parse(str(path))
     assert doc.documentElement.getAttribute("viewBox")
     assert "inkscape" not in path.read_text() and "sodipodi" not in path.read_text()
+
+
+def test_a_site_notice_tops_every_page_and_is_escaped():
+    page = build_index.render_hve_page(content(), None, {})
+    shown = build_index.with_site_notice(page, "Store <down> for maintenance")
+    assert shown.index("Store &lt;down&gt; for maintenance") < shown.index("Downloads open at release")
+    assert "<down>" not in shown
+    assert build_index.with_site_notice(page, "") == page        # no notice, page untouched

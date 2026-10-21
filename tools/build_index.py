@@ -933,6 +933,32 @@ def _brand_svg(name):
         return fh.read().replace("#6b0739", "currentColor")
 
 
+def load_site_notice():
+    """content/site_notice.toml's `text`, or "" when there is none.
+
+    A site-wide notice shown at the top of every page this build writes: an
+    outage the store, downloads or license activation are under, said where
+    a customer looks first. The pages are published from here, so it goes
+    up without a gateway deploy -- which is exactly when one may be impossible.
+    Empty or absent, nothing is shown."""
+    path = os.path.join(CONTENT_DIR, "site_notice.toml")
+    if not os.path.isfile(path):
+        return ""
+    with open(path, "rb") as fh:
+        return str(tomllib.load(fh).get("text", "")).strip()
+
+
+def with_site_notice(page, notice=None):
+    """The page with the site notice as the first thing in its body."""
+    notice = load_site_notice() if notice is None else notice
+    if not notice or "<body>" not in page:
+        return page
+    banner = ('<div role="status" style="background:#7a1f1f;color:#fff;padding:12px 16px;'
+              'text-align:center;font:600 15px/1.45 system-ui,sans-serif">'
+              f'{html.escape(notice)}</div>')
+    return page.replace("<body>", "<body>\n" + banner, 1)
+
+
 def load_hve_content():
     path = os.path.join(CONTENT_DIR, "hve.toml")
     if not os.path.isfile(path):
@@ -1233,7 +1259,7 @@ def write_hve_site(out_dir):
     release = _newest_release(HVE_REPO)
     downloads = hve_downloads(release)
     with open(os.path.join(out_dir, "hve.html"), "w", encoding="utf-8") as fh:
-        fh.write(render_hve_page(c, release, downloads))
+        fh.write(with_site_notice(render_hve_page(c, release, downloads)))
     with open(os.path.join(out_dir, "hve-downloads.json"), "w", encoding="utf-8") as fh:
         json.dump(downloads, fh, indent=2)
         fh.write("\n")
@@ -1316,9 +1342,9 @@ def main():
     # installable by an entitled token); the public site does not.
     public_entries = [e for e in entries if e.get("id") not in HIDDEN_PRODUCTS]
     with open(os.path.join(out_dir, "index.html"), "w", encoding="utf-8") as fh:
-        fh.write(render_landing_page(public_entries, content, support))
+        fh.write(with_site_notice(render_landing_page(public_entries, content, support)))
     with open(os.path.join(out_dir, "access-and-licensing.html"), "w", encoding="utf-8") as fh:
-        fh.write(render_access_licensing_page())
+        fh.write(with_site_notice(render_access_licensing_page()))
 
     pages_dir = os.path.join(out_dir, "products")
     os.makedirs(pages_dir, exist_ok=True)
@@ -1326,10 +1352,10 @@ def main():
         if pid in HIDDEN_PRODUCTS:
             continue  # no public product page for internal/beta tools
         with open(os.path.join(pages_dir, f"{pid}.html"), "w", encoding="utf-8") as fh:
-            fh.write(render_product_page(pid, c, releases.get(pid)))
+            fh.write(with_site_notice(render_product_page(pid, c, releases.get(pid))))
     if support:
         with open(os.path.join(pages_dir, "support.html"), "w", encoding="utf-8") as fh:
-            fh.write(render_support_page(support))
+            fh.write(with_site_notice(render_support_page(support)))
     write_hve_site(out_dir)
     assets_src = os.path.join(CONTENT_DIR, "assets")
     if os.path.isdir(assets_src):
