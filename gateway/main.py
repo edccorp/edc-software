@@ -60,6 +60,13 @@ Environment variables:
     CACHE_TTL        origin cache seconds (default 300)
     LICENSE_SIGNING_KEY  the Ed25519 private key (PEM) that signs HVE
                      licenses; the /v1 endpoints answer 503 without it
+    UPDATE_SIGNING_KEY  the Ed25519 private key (PEM) that signs the HVE
+                     update list (/v1/updates); kid UPDATE_KEY_ID (default
+                     upd-2026a). Never the license key: HVE trusts each
+                     only for its own document
+    HVE_DATA_REPO    "owner/repo" whose published "data-<version>" releases
+                     carry the EDC vehicle data packs (default
+                     edccorp/hve-next), read with GH_TOKEN
     LICENSE_KEY_ID   the key's name in each license (default 2026a); HVE
                      trusts a license only under a kid it knows
 """
@@ -116,6 +123,16 @@ except Exception as exc:  # noqa: BLE001 -- any parse failure is the same answer
     # The exception's text, never the variable's: it holds the private key.
     LICENSE_KEY_ERROR = f"LICENSE_SIGNING_KEY could not be read: {type(exc).__name__}"
     print(f"[gateway] ERROR: {LICENSE_KEY_ERROR}")
+UPDATE_KEY_ID = os.environ.get("UPDATE_KEY_ID", "upd-2026a").strip() or "upd-2026a"
+try:
+    UPDATE_KEY = (licensing.load_signing_key(os.environ["UPDATE_SIGNING_KEY"])
+                  if os.environ.get("UPDATE_SIGNING_KEY", "").strip() else None)
+    UPDATE_KEY_ERROR = None
+except Exception as exc:  # noqa: BLE001
+    UPDATE_KEY = None
+    UPDATE_KEY_ERROR = f"UPDATE_SIGNING_KEY could not be read: {type(exc).__name__}"
+    print(f"[gateway] ERROR: {UPDATE_KEY_ERROR}")
+HVE_DATA_REPO = os.environ.get("HVE_DATA_REPO", "edccorp/hve-next").strip()
 PUBLIC_BASE = os.environ.get("PUBLIC_BASE", "https://extensions.edccorp.com").rstrip("/")
 ACCESS_URL = f"{PUBLIC_BASE}/access-and-licensing.html"
 # Products currently offered free: included with every token, and obtainable
@@ -1535,6 +1552,148 @@ async def license_machines(request: Request):
 
 
 # --------------------------------------------------------------------------
+# /v1/updates and /v1/datapack: EDC vehicle data from inside HVE (hve-next
+# docs/DISTRIBUTION.md, "The EDC data pack" and "Updating").
+#
+# A data pack is a PUBLISHED release of HVE_DATA_REPO tagged "data-<version>"
+# carrying EDCVehicles-<version>.zip (hve-next's datapack workflow makes one).
+# /v1/updates answers a licensed computer with the signed list of the packs
+# its key may have; the app checks the signature against the update key it
+# trusts, the zip's SHA-256 against the list, and offers the newest one. The
+# zip itself is streamed by /v1/datapack/<name> to a key holding "edcdb".
+
+DATAPACK_FEATURE = "edcdb"
+DATAPACK_TTL = 300
+_datapacks_cache = {"at": 0.0, "data": None}
+
+
+def _datapack_version(tag: str) -> str | None:
+    """"data-2026.10" -> "2026.10"; anything else is not a data pack."""
+    if not tag.startswith("data-"):
+        return None
+    version = tag[len("data-"):]
+    parts = version.split(".")
+    return version if parts and all(p.isdigit() for p in parts) else None
+
+
+async def _datapacks() -> list[dict]:
+    """The published data packs, newest first: {version, name, asset_id,
+    size, sha256}. A release whose zip or hash cannot be found is skipped
+    rather than offered with a guess."""
+    now = time.time()
+    if _datapacks_cache["data"] is not None and now - _datapacks_cache["at"] < DATAPACK_TTL:
+        return _datapacks_cache["data"]
+    headers = {"Accept": "application/vnd.github+json"}
+    if GH_TOKEN:
+        headers["Authorization"] = f"Bearer {GH_TOKEN}"
+    packs = []
+    async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+        r = await client.get(f"https://api.github.com/repos/{HVE_DATA_REPO}/releases?per_page=30",
+                             headers=headers)
+        if r.status_code != 200:
+            raise HTTPException(status_code=502, detail={
+                "code": "no_data_list",
+                "message": "The vehicle data list could not be read. Try again later."})
+        for rel in r.json():
+            version = _datapack_version(str(rel.get("tag_name", "")))
+            if not version or rel.get("draft"):
+                continue
+            name = f"EDCVehicles-{version}.zip"
+            assets = {a.get("name"): a for a in rel.get("assets", [])}
+            zip_asset = assets.get(name)
+            if not zip_asset:
+                continue
+            sha = str(zip_asset.get("digest") or "")
+            sha = sha[len("sha256:"):] if sha.startswith("sha256:") else ""
+            side = assets.get(name + ".sha256")
+            if not sha and side:
+                h = dict(headers, Accept="application/octet-stream")
+                sr = await client.get(
+                    f"https://api.github.com/repos/{HVE_DATA_REPO}/releases/assets/{side['id']}",
+                    headers=h)
+                if sr.status_code == 200:
+                    sha = sr.text.split()[0] if sr.text.split() else ""
+            sha = sha.lower()
+            if len(sha) != 64 or any(c not in "0123456789abcdef" for c in sha):
+                print(f"[gateway] data pack {name}: no SHA-256 found, not offered")
+                continue
+            packs.append({"version": version, "name": name, "asset_id": zip_asset["id"],
+                          "size": int(zip_asset.get("size") or 0), "sha256": sha})
+    packs.sort(key=lambda p: [int(x) for x in p["version"].split(".")], reverse=True)
+    _datapacks_cache.update(at=now, data=packs)
+    return packs
+
+
+async def _datapack_customer(request: Request, kind: str) -> dict:
+    """The caller's normalized entitlements, from a Bearer secret that holds HVE."""
+    address = _client_address(request)
+    if _over_limit("fail", address, record=False) or _over_limit(kind, address):
+        raise HTTPException(status_code=429, detail={
+            "code": "rate_limited",
+            "message": "Too many requests from this network. Wait a few minutes and try again."})
+    auth = request.headers.get("authorization", "")
+    secret = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+    raw = (await _customer_tokens()).get(secret) if secret else None
+    if raw is None:
+        raise _unknown_secret(address)
+    customer = _entitlements(raw)
+    try:
+        licensing.hve_entitlement(customer["products"])
+    except licensing.LicenseError as error:
+        raise _license_refusal(error)
+    return customer
+
+
+def _may_have_data(customer: dict) -> bool:
+    products = customer["products"]
+    return DATAPACK_FEATURE in products and _active(products[DATAPACK_FEATURE])
+
+
+@app.get("/v1/updates")
+async def hve_updates(request: Request):
+    """The signed update list for this key: {"updates": "<document>"}.
+    Only data packs so far; the program's own releases are listed on
+    hve.edccorp.com."""
+    if UPDATE_KEY is None:
+        raise HTTPException(status_code=503, detail={
+            "code": "not_configured",
+            "message": "Vehicle data updates are not available right now."})
+    customer = await _datapack_customer(request, "refresh")
+    data = []
+    if _may_have_data(customer):
+        # The pack is fetched from this same origin, which is the only place
+        # HVE sends the secret along with a download. Railway ends TLS in
+        # front of the app and says so in X-Forwarded-Proto.
+        host = request.headers.get("host", "license.edccorp.com")
+        scheme = request.headers.get("x-forwarded-proto", request.url.scheme).split(",")[0].strip()
+        for p in await _datapacks():
+            data.append({"pack": "edc-vehicles", "version": p["version"],
+                         "feature": DATAPACK_FEATURE,
+                         "url": f"{scheme}://{host}/v1/datapack/{p['name']}",
+                         "sha256": p["sha256"], "size": p["size"]})
+    listing = {"v": 1, "kid": UPDATE_KEY_ID,
+               "issued": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+               "data": data}
+    return {"updates": licensing.encode_license(listing, UPDATE_KEY)}
+
+
+@app.get("/v1/datapack/{filename}")
+async def hve_datapack(filename: str, request: Request):
+    customer = await _datapack_customer(request, "refresh")
+    if not _may_have_data(customer):
+        raise HTTPException(status_code=403, detail={
+            "code": "no_data",
+            "message": "This EDC Software secret does not include the EDC vehicle data. "
+                       "Contact Engineering Dynamics Company to add it."})
+    pack = next((p for p in await _datapacks() if p["name"] == filename), None)
+    if pack is None:
+        raise HTTPException(status_code=404, detail={
+            "code": "no_such_pack", "message": f"No vehicle data pack named {filename}."})
+    return await _stream_release_asset(HVE_DATA_REPO, pack["asset_id"], filename,
+                                       customer["name"], DATAPACK_FEATURE, "application/zip")
+
+
+# --------------------------------------------------------------------------
 # /offline: the HVE license page in a browser. Two jobs, both for a computer
 # that cannot do them itself:
 #   - OFFLINE ACTIVATION. HVE on a computer with no internet saves a request
@@ -1757,6 +1916,11 @@ async def healthz():
     }
     if LICENSE_KEY_ERROR:
         body["license_signing_error"] = LICENSE_KEY_ERROR
+    body["update_signing"] = (
+        {"kid": UPDATE_KEY_ID, "public_key": licensing.public_key_fingerprint(UPDATE_KEY)}
+        if UPDATE_KEY is not None else None)
+    if UPDATE_KEY_ERROR:
+        body["update_signing_error"] = UPDATE_KEY_ERROR
     if PRICES_ERROR:
         body["store_error"] = PRICES_ERROR
     if FREE_TERM_ERROR:

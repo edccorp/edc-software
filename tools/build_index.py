@@ -150,9 +150,11 @@ def _newest_release(repo):
     except urllib.error.URLError as err:
         print(f"SKIP {repo}: cannot list releases ({err.reason})")
         return None
-    # The API returns releases newest-first.
+    # The API returns releases newest-first. A "data-<version>" release is an
+    # EDC vehicle data pack (hve-next's datapack workflow), served to licensed
+    # computers through /v1/updates, never a program release for the page.
     for release in releases:
-        if not release.get("draft"):
+        if not release.get("draft") and not str(release.get("tag_name", "")).startswith("data-"):
             return release
     print(f"SKIP {repo}: no published releases")
     return None
