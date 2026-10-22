@@ -1003,16 +1003,65 @@ def _term_labels() -> tuple[str | None, str | None]:
     return f"{days}‑day access", f"{days} days"
 
 
+def _store_unavailable(reason: str) -> HTMLResponse:
+    """What a buyer sees when the store cannot reach Stripe.
+
+    It used to be the raw error -- ``{"detail": "Stripe returned 401 for
+    price_..."}`` -- shown to someone about to pay. The reason goes to the
+    log for whoever runs the gateway; the buyer gets a page that says the
+    store is down for now and what to do, and a 503 with Retry-After so
+    nothing caches the outage as the store.
+    """
+    print(f"[gateway] ERROR: store unavailable: {reason}")
+    page = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Store unavailable — EDC Software</title>
+<style>
+  :root { color-scheme: light dark;
+    --bg: #f6f7f9; --card: #ffffff; --ink: #1c2530; --muted: #5b6773;
+    --accent: #6b2440; --border: #e2e6ea; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #10151b; --card: #1a2129; --ink: #e8edf2;
+      --muted: #9aa7b2; --accent: #d98aa0; --border: #2a333d; } }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.6 system-ui, "Segoe UI", sans-serif; }
+  main { max-width: 34rem; margin: 3rem auto; padding: 0 1.25rem; }
+  .card { background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 2rem; }
+  h1 { margin: 0 0 .5rem; font-size: 1.4rem; }
+  .muted { color: var(--muted); }
+  a.btn { display: inline-block; margin-top: 1rem; background: var(--accent);
+    color: #fff; border-radius: 8px; padding: .6rem 1.1rem; font-weight: 600;
+    text-decoration: none; }
+</style></head><body><main><div class="card">
+<h1>Store temporarily unavailable</h1>
+<p>We can't take orders right now because our payment provider isn't
+answering. Nothing has been charged.</p>
+<p class="muted">Please try again in a few minutes. If it is still down,
+contact Engineering Dynamics Company and we will set you up directly.</p>
+<p class="muted">Add-ons you already have keep working.</p>
+<a class="btn" href="/store">Try again</a>
+</div></main></body></html>"""
+    return HTMLResponse(page, status_code=503, headers={"Retry-After": "300"})
+
+
 @app.get("/store")
 async def store():
     if not (STRIPE_SECRET_KEY and STRIPE_PRICES):
-        raise HTTPException(status_code=503, detail="store is not configured (STRIPE_PRICES)")
+        return _store_unavailable("store is not configured (STRIPE_SECRET_KEY / STRIPE_PRICES)")
     term_compact, term_prose = _term_labels()
     rows = ""
     for pid in PRODUCT_IDS:
         if pid not in STRIPE_PRICES:
             continue
-        price = await _stripe_price(STRIPE_PRICES[pid])
+        try:
+            price = await _stripe_price(STRIPE_PRICES[pid])
+        except HTTPException as exc:
+            return _store_unavailable(str(exc.detail))
+        except httpx.HTTPError as exc:
+            return _store_unavailable(f"cannot reach Stripe: {type(exc).__name__}")
         price_html = html.escape(_money(price["amount"], price["currency"]))
         if price["amount"] and term_compact:
             price_html += f'<br><span class="term">{html.escape(term_compact)}</span>'
@@ -1100,7 +1149,7 @@ function total() {{
 @app.get("/checkout")
 async def checkout(request: Request):
     if not (STRIPE_SECRET_KEY and STRIPE_PRICES):
-        raise HTTPException(status_code=503, detail="store is not configured (STRIPE_PRICES)")
+        return _store_unavailable("store is not configured (STRIPE_SECRET_KEY / STRIPE_PRICES)")
     ids = [
         p for p in request.query_params.getlist("products")
         if p in STRIPE_PRICES or p in FREE_PRODUCTS
@@ -1125,15 +1174,18 @@ async def checkout(request: Request):
     for i, pid in enumerate(ids):
         form[f"line_items[{i}][price]"] = STRIPE_PRICES[pid]
         form[f"line_items[{i}][quantity]"] = "1"
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.post(
-            "https://api.stripe.com/v1/checkout/sessions",
-            data=form,
-            headers={"Authorization": f"Bearer {STRIPE_SECRET_KEY}"},
-        )
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                "https://api.stripe.com/v1/checkout/sessions",
+                data=form,
+                headers={"Authorization": f"Bearer {STRIPE_SECRET_KEY}"},
+            )
+    except httpx.HTTPError as exc:
+        return _store_unavailable(f"cannot reach Stripe for checkout: {type(exc).__name__}")
     if resp.status_code != 200:
-        print(f"[gateway] ERROR: checkout session creation failed: {resp.status_code} {resp.text[:300]}")
-        raise HTTPException(status_code=502, detail="could not start checkout — try again shortly")
+        return _store_unavailable(
+            f"checkout session creation failed: {resp.status_code} {resp.text[:300]}")
     print(f"[gateway] store: checkout started for {', '.join(ids)}")
     return RedirectResponse(resp.json()["url"], status_code=303)
 
