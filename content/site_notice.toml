@@ -2,4 +2,4 @@
 # hve.edccorp.com (tools/build_index.py, with_site_notice). Empty text, or no
 # file at all, shows nothing. Published by the hourly site job, so it needs no
 # gateway deploy.
-text = "Purchases, downloads and license activation are temporarily unavailable while we respond to a security incident at our hosting provider. Installed software keeps working. We expect to restore service shortly."
+text = ""
