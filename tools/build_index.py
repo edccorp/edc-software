@@ -973,6 +973,10 @@ def hve_downloads(release):
     out = {}
     if not release:
         return out
+    # The version and date let the gateway's /v1/updates describe the release
+    # to the app without a second GitHub lookup per request.
+    version = str(release.get("tag_name", "")).lstrip("v")
+    released = (release.get("published_at") or "")[:10]
     for asset in release.get("assets", []):
         name = asset.get("name", "")
         platform = next((p[0] for p in HVE_PLATFORMS if p[3](name)), None)
@@ -984,6 +988,8 @@ def hve_downloads(release):
             # A pre-release (v2027.0.0-alpha.1) is for testers only: the
             # gateway streams it only to a key granted HVE_TESTING_PRODUCT.
             "prerelease": bool(release.get("prerelease")),
+            "version": version,
+            "released": released,
             "asset_id": asset.get("id"),
             "size": asset.get("size", 0),
             "platform": platform or "checksums",

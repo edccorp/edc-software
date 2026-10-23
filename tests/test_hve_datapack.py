@@ -36,6 +36,16 @@ PACKS = [{"version": "2026.11", "name": "EDCVehicles-2026.11.zip", "asset_id": 4
           "size": 85_000_000, "sha256": "c" * 64},
          {"version": "2026.10", "name": "EDCVehicles-2026.10.zip", "asset_id": 40,
           "size": 84_000_000, "sha256": "b" * 64}]
+def _file(name, platform, sha, size, version="1.0.0", released="2026-11-02", prerelease=False):
+    return {"repo": "edccorp/hve-next", "prerelease": prerelease, "version": version,
+            "released": released, "asset_id": 1, "size": size, "platform": platform, "sha256": sha}
+
+
+DOWNLOADS = {
+    "HVEStudio-1.0.0-setup.exe": _file("", "windows", "d" * 64, 9_000_000),
+    "HVEStudio-1.0.0-linux-x86_64.tar.gz": _file("", "linux", "e" * 64, 12_000_000),
+    "SHA256SUMS.txt": _file("", "checksums", "", 200),
+}
 IP = {"x-forwarded-for": "198.51.100.7"}
 
 
@@ -69,7 +79,12 @@ def gw(monkeypatch):
         streamed.append((repo, asset_id, filename, who, product_id))
         return Response(b"zip-bytes", media_type=media_type)
 
+    async def origin(path):
+        assert path == "hve-downloads.json"
+        return json.dumps(DOWNLOADS).encode()
+
     monkeypatch.setattr(main, "_customer_tokens", tokens)
+    monkeypatch.setattr(main, "_origin_get", origin)
     monkeypatch.setattr(main, "_datapacks", packs)
     monkeypatch.setattr(main, "_stream_release_asset", stream)
     main._LICENSE_HITS.clear()
@@ -95,6 +110,49 @@ def test_the_list_is_signed_by_the_update_key_and_names_its_kid(gw):
         "pack": "edc-vehicles", "version": "2026.11", "feature": "edcdb",
         "url": "http://license.edccorp.com/v1/datapack/EDCVehicles-2026.11.zip",
         "sha256": "c" * 64, "size": 85_000_000}
+
+
+def test_the_list_carries_the_program_release_with_its_files(gw):
+    doc = _listing(gw, "edc_full", **{"x-forwarded-proto": "https"})
+    assert doc["channel"] == "stable"
+    assert doc["releases"] == [{
+        "version": "1.0.0", "released": "2026-11-02", "prerelease": False, "covered": True,
+        "notes_url": "https://hve.edccorp.com/",
+        "files": {
+            "windows": {"url": "https://license.edccorp.com/download/HVEStudio-1.0.0-setup.exe",
+                        "sha256": "d" * 64, "size": 9_000_000},
+            "linux": {"url": "https://license.edccorp.com/download/HVEStudio-1.0.0-linux-x86_64.tar.gz",
+                      "sha256": "e" * 64, "size": 12_000_000}}}]
+
+
+def test_a_release_after_the_maintenance_date_is_listed_but_not_covered(gw):
+    KEYS["edc_lapsed_program"] = {"name": "Lapsed Program", "products": {"hve": "2026-06-30"}}
+    try:
+        doc = _listing(gw, "edc_lapsed_program")
+        assert [(r["version"], r["covered"]) for r in doc["releases"]] == [("1.0.0", False)]
+        KEYS["edc_lapsed_program"]["products"]["hve"] = "2026-11-02"      # the release day itself
+        assert _listing(gw, "edc_lapsed_program")["releases"][0]["covered"] is True
+    finally:
+        del KEYS["edc_lapsed_program"]
+
+
+def test_a_prerelease_is_listed_to_testers_only(gw, monkeypatch):
+    pre = {n: dict(e, prerelease=True, version="1.1.0-alpha.1") for n, e in DOWNLOADS.items()}
+    monkeypatch.setitem(DOWNLOADS, "HVEStudio-1.0.0-setup.exe", pre["HVEStudio-1.0.0-setup.exe"])
+    monkeypatch.setitem(DOWNLOADS, "HVEStudio-1.0.0-linux-x86_64.tar.gz", pre["HVEStudio-1.0.0-linux-x86_64.tar.gz"])
+    KEYS["edc_tester"] = {"name": "Tester", "products": {"hve": None, "hve_testing": "2999-01-01"}}
+    try:
+        assert _listing(gw, "edc_full")["releases"] == []
+        assert [r["version"] for r in _listing(gw, "edc_tester")["releases"]] == ["1.1.0-alpha.1"]
+    finally:
+        del KEYS["edc_tester"]
+
+
+def test_no_published_release_is_an_empty_release_list(gw, monkeypatch):
+    async def none(path):
+        return b"{}"
+    monkeypatch.setattr(gw.main, "_origin_get", none)
+    assert _listing(gw, "edc_full")["releases"] == []
 
 
 def test_the_pack_url_is_https_behind_railways_tls(gw):

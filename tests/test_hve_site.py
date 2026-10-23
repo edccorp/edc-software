@@ -76,6 +76,8 @@ def test_only_platform_files_and_the_checksums_are_downloadable():
     assert downloads["HVEStudio-2027.1.0-setup.exe"]["platform"] == "windows"
     assert downloads["HVEStudio-2027.1.0-setup.exe"]["sha256"] == "a" * 64
     assert all(d["repo"] == "edccorp/hve-next" for d in downloads.values())
+    assert all(d["version"] == "2027.1.0" and d["released"] == "2027-01-15"
+               for d in downloads.values())
 
 
 def test_a_draft_release_never_reaches_the_page(monkeypatch, tmp_path):

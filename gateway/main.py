@@ -76,6 +76,7 @@ import hashlib
 import hmac
 import html
 import json
+import re
 import os
 import secrets
 import time
@@ -1615,6 +1616,7 @@ async def license_machines(request: Request):
 # zip itself is streamed by /v1/datapack/<name> to a key holding "edcdb".
 
 DATAPACK_FEATURE = "edcdb"
+HVE_SITE_URL = "https://hve.edccorp.com/"
 DATAPACK_TTL = 300
 _datapacks_cache = {"at": 0.0, "data": None}
 
@@ -1701,31 +1703,73 @@ def _may_have_data(customer: dict) -> bool:
     return DATAPACK_FEATURE in products and _active(products[DATAPACK_FEATURE])
 
 
+async def _program_releases(customer: dict, maintenance_until: str | None,
+                            base: str) -> list[dict]:
+    """The HVE program releases this key is offered, newest first.
+
+    Read from hve-downloads.json, the file the site job writes from the newest
+    published hve-next release: the same files, and only the ones, that
+    /download/<file> will stream, so no entry here can 404. `covered` is the
+    key's maintenance line applied to the release date; the app re-derives it
+    from the license it holds. A pre-release is a test build and goes to
+    testers only, as it does on the download route.
+    """
+    try:
+        downloads = json.loads(await _origin_get("hve-downloads.json"))
+    except Exception:
+        return []
+    if not isinstance(downloads, dict):
+        return []
+    tester = _hve_tester(customer)
+    found: dict[str, dict] = {}
+    for name, entry in downloads.items():
+        if not isinstance(entry, dict) or entry.get("platform") in (None, "checksums"):
+            continue
+        version, sha = str(entry.get("version") or ""), str(entry.get("sha256") or "")
+        if not version or not sha or (entry.get("prerelease") and not tester):
+            continue
+        release = found.setdefault(version, {
+            "version": version, "released": str(entry.get("released") or ""),
+            "prerelease": bool(entry.get("prerelease")),
+            "covered": False, "notes_url": HVE_SITE_URL, "files": {}})
+        release["files"][entry["platform"]] = {
+            "url": f"{base}/download/{name}", "sha256": sha, "size": int(entry.get("size") or 0)}
+    for release in found.values():
+        release["covered"] = (maintenance_until is None
+                              or (bool(release["released"]) and release["released"] <= maintenance_until))
+    return sorted(found.values(), reverse=True,
+                  key=lambda r: [int(x) if x.isdigit() else 0
+                                 for x in re.split(r"[.-]", r["version"])])
+
+
 @app.get("/v1/updates")
 async def hve_updates(request: Request):
     """The signed update list for this key: {"updates": "<document>"}.
-    Only data packs so far; the program's own releases are listed on
-    hve.edccorp.com."""
+    `releases` are the program's own versions (hve-next docs/DISTRIBUTION.md,
+    "Updating"); `data` are the EDC vehicle data packs."""
     if UPDATE_KEY is None:
         raise HTTPException(status_code=503, detail={
             "code": "not_configured",
             "message": "Vehicle data updates are not available right now."})
     customer = await _datapack_customer(request, "refresh")
+    _features, maintenance_until = licensing.hve_entitlement(customer["products"])
+    # Files are fetched from this same origin, which is the only place HVE
+    # sends the secret along with a download. Railway ends TLS in front of
+    # the app and says so in X-Forwarded-Proto.
+    host = request.headers.get("host", "license.edccorp.com")
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme).split(",")[0].strip()
+    base = f"{scheme}://{host}"
+    releases = await _program_releases(customer, maintenance_until, base)
     data = []
     if _may_have_data(customer):
-        # The pack is fetched from this same origin, which is the only place
-        # HVE sends the secret along with a download. Railway ends TLS in
-        # front of the app and says so in X-Forwarded-Proto.
-        host = request.headers.get("host", "license.edccorp.com")
-        scheme = request.headers.get("x-forwarded-proto", request.url.scheme).split(",")[0].strip()
         for p in await _datapacks():
             data.append({"pack": "edc-vehicles", "version": p["version"],
                          "feature": DATAPACK_FEATURE,
-                         "url": f"{scheme}://{host}/v1/datapack/{p['name']}",
+                         "url": f"{base}/v1/datapack/{p['name']}",
                          "sha256": p["sha256"], "size": p["size"]})
-    listing = {"v": 1, "kid": UPDATE_KEY_ID,
+    listing = {"v": 1, "kid": UPDATE_KEY_ID, "channel": "stable",
                "issued": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-               "data": data}
+               "releases": releases, "data": data}
     return {"updates": licensing.encode_license(listing, UPDATE_KEY)}
 
 
