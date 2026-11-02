@@ -1082,7 +1082,7 @@ def render_hve_page(c, release, downloads):
   <input type="email" name="email" placeholder="Email" aria-label="Email" required maxlength="254" autocomplete="email">
   <input type="text" name="company" placeholder="Company" aria-label="Company" maxlength="160" autocomplete="organization">
   <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
-  <label><input type="checkbox" name="current_hve_user" value="1"> I’m a current HVE user</label>
+  <label><input type="checkbox" name="current_hve_user" value="1"> I’m a current, supported HVE user</label>
   <button type="submit">Sign me up</button>
 </form>
 <p class="sub">{esc('signup_note')}</p>

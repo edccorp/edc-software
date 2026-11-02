@@ -35,12 +35,12 @@ features = [
 # "What's coming": a paragraph, then a picture each from content/assets.
 # Leave coming_intro empty and delete the [[gallery]] entries to hide it.
 coming_title = "What’s coming in HVE Studio"
-coming_intro = "HVE Studio is coming soon. We plan to release it well before the 2027 HVE Forum, which will be the first training on HVE Studio. Here’s a look at what’s new."
+coming_intro = "HVE Studio is coming soon. We plan to release it before the 2027 HVE Forum, which will be the first training on HVE Studio. Here’s a look at what’s new."
 
 # "Get HVE Studio updates": the form posts to the gateway's /signup. Leave
 # signup_intro empty to hide the section.
 signup_title = "Get HVE Studio updates"
-signup_intro = "Sign up to hear about HVE Studio as it’s ready. Current HVE users: tick the box, and we’ll invite you when the beta opens."
+signup_intro = "Sign up to hear about HVE Studio as it’s ready. HVE users with a current support policy: tick the box, and we’ll invite you when the beta opens."
 signup_note = "We use your address only for HVE Studio news, and every email has a link to leave the list."
 
 # Shown under "Licensing". Paragraphs separated by a blank line.
