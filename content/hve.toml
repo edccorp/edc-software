@@ -43,6 +43,11 @@ signup_title = "Get HVE Studio updates"
 signup_intro = "Sign up to hear about HVE Studio as it’s ready. HVE users with a current support policy: tick the box, and we’ll invite you when the beta opens."
 signup_note = "We use your address only for HVE Studio news, and every email has a link to leave the list."
 
+# While the newest release is a TEST build (a pre-release), the downloads are
+# shown near the end of the page under this heading, for invited testers.
+tester_title = "For testers"
+tester_intro = "HVE Studio isn’t released yet. These test builds are for invited testers only. Everyone else: see what’s coming above, and sign up for updates to hear when it’s released."
+
 # Shown under "Licensing". Paragraphs separated by a blank line.
 licensing = """HVE is licensed per computer. Activate it once from Help → License with your EDC Software key; it refreshes itself online, and keeps working for 60 days without an internet connection. A computer that never connects can be activated with a license file from the offline page.
 

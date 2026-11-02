@@ -223,3 +223,35 @@ def test_the_unsubscribe_link_takes_the_address_off_and_signing_up_rejoins(monke
     gw.main._SIGNUP_HITS.clear()
     gw.post("/signup", data=FORM)
     assert "unsubscribed" not in gw.store.data["pat@example.com"]
+
+
+# ------------------------------------------------- a test build is for testers
+
+PRE = {"tag_name": "v1.0.0-alpha.5", "draft": False, "prerelease": True,
+       "published_at": "2026-11-02T13:23:43Z", "body": "",
+       "assets": [{"name": "HVEStudio-1.0.0-alpha.5-setup.exe", "id": 1, "size": 9_000_000,
+                   "digest": "sha256:" + "a" * 64}]}
+FINAL = dict(PRE, tag_name="v1.0.0", prerelease=False,
+             assets=[dict(PRE["assets"][0], name="HVEStudio-1.0.0-setup.exe")])
+
+
+def test_a_test_build_is_offered_to_testers_near_the_end_not_as_a_download():
+    page = build_index.render_hve_page(content(), PRE, build_index.hve_downloads(PRE))
+    assert "<h2>For testers</h2>" in page and "<h2>Download</h2>" not in page
+    assert "invited testers only" in page and "Only a tester" in page
+    # Below everything a prospect reads, just above Questions.
+    assert page.index('id="download"') > page.index("<h2>Requirements</h2>")
+    assert page.index('id="download"') < page.index("<h2>Questions</h2>")
+    assert '<a class="btn" href="#coming">' in page          # the hero leads with what's coming
+    assert '<a class="btn" href="#download">' not in page
+    assert '<a href="#download">Testers</a>' in page          # and the menu says who it is for
+    assert "/download/HVEStudio-1.0.0-alpha.5-setup.exe" in page   # testers still find it
+    assert "<h2>What’s new</h2>" not in page
+
+
+def test_a_release_is_a_download_again_in_its_usual_place():
+    page = build_index.render_hve_page(content(), FINAL, build_index.hve_downloads(FINAL))
+    assert "<h2>Download</h2>" in page and "For testers" not in page
+    assert page.index('id="download"') < page.index("<h2>Capabilities</h2>")
+    assert '<a class="btn" href="#download">Download</a>' in page
+    assert '<a href="#download">Download</a>' in page

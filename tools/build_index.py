@@ -1088,14 +1088,43 @@ def render_hve_page(c, release, downloads):
 <p class="sub">{esc('signup_note')}</p>
 </section>"""
     # Before release the page leads with what is coming; after, with Download.
-    if release or not coming:
+    # A PRE-release is for invited testers only: until HVE Studio is
+    # released, the page must not read as "download it here". The download
+    # cards then sit near the end under a heading that says who they are
+    # for, the hero leads with what is coming, and the menu says "Testers".
+    testing = prerelease
+    dl_cards = chr(10).join(cards)
+    if testing:
+        download_section = f"""<section class="panel" id="download">
+<h2>{esc('tester_title', 'For testers')}</h2>
+{paragraphs(c.get('tester_intro', ''))}
+{status}
+<div class="grid">
+{dl_cards}
+</div>
+<p class="sub">Only a tester's EDC Software key can download a test build. Lost it? <a href="{RECOVER_URL}">Have it emailed to you</a>.</p>
+</section>
+{f'<section class="panel">{whats_new.replace("<h2>What’s new</h2>", "<h2>In this test build</h2>", 1)}</section>' if whats_new else ''}"""
+    else:
+        download_section = f"""<section class="panel" id="download">
+<h2>Download</h2>
+{status}
+<div class="grid">
+{dl_cards}
+</div>
+<p class="sub">Downloading needs your EDC Software key. Lost it? <a href="{RECOVER_URL}">Have it emailed to you</a>.</p>
+</section>
+
+{f'<section class="panel">{whats_new}</section>' if whats_new else ''}"""
+    if (release and not testing) or not coming:
         hero_cta = ('<a class="btn" href="#download">Download</a>\n      '
                     + ('<a class="btn ghost" href="#updates">Get updates</a>' if signup
                        else '<a class="btn ghost" href="#licensing">Licensing</a>'))
     else:
         hero_cta = ('<a class="btn" href="#coming">See what’s coming</a>\n      '
                     + ('<a class="btn ghost" href="#updates">Get updates</a>' if signup
-                       else '<a class="btn ghost" href="#download">Download</a>'))
+                       else ('<a class="btn ghost" href="#licensing">Licensing</a>' if testing
+                             else '<a class="btn ghost" href="#download">Download</a>')))
     nav_extra = (('<a href="#coming">What’s coming</a>' if coming else '')
                  + ('<a href="#updates">Updates</a>' if signup else ''))
 
@@ -1120,7 +1149,7 @@ def render_hve_page(c, release, downloads):
 <body>
 <nav class="topnav">
   <a href="https://www.edccorp.com">&larr; Back to edccorp.com</a>
-  <span class="links">{nav_extra}<a href="#download">Download</a><a href="#licensing">Licensing</a><a
+  <span class="links">{nav_extra}<a href="#download">{'Testers' if testing else 'Download'}</a><a href="#licensing">Licensing</a><a
   href="#support">Support</a><a href="{PAGES_BASE}/">EDC Blender Extensions</a></span>
 </nav>
 
@@ -1146,16 +1175,7 @@ def render_hve_page(c, release, downloads):
 
 {signup}
 
-<section class="panel" id="download">
-<h2>Download</h2>
-{status}
-<div class="grid">
-{chr(10).join(cards)}
-</div>
-<p class="sub">Downloading needs your EDC Software key. Lost it? <a href="{RECOVER_URL}">Have it emailed to you</a>.</p>
-</section>
-
-{f'<section class="panel">{whats_new}</section>' if whats_new else ''}
+{'' if testing else download_section}
 
 <section class="panel">
 <h2>Capabilities</h2>
@@ -1177,6 +1197,8 @@ longer have &rarr;</a></p>
 {requirements}
 </ul>
 </section>
+
+{download_section if testing else ''}
 
 <section class="panel faq">
 <h2>Questions</h2>
