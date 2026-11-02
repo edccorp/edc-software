@@ -1052,6 +1052,53 @@ def render_hve_page(c, release, downloads):
                   'released.</div>')
         whats_new = ""
 
+    # "What's coming": a picture each, from content/assets (the gateway serves
+    # them at /assets/ on hve.edccorp.com too).
+    gallery = "\n".join(
+        f'<figure class="shot"><img src="assets/{html.escape(g.get("image", ""))}" '
+        f'alt="{html.escape(g.get("title", ""))}" loading="lazy">'
+        f'<figcaption><strong>{html.escape(g.get("title", ""))}</strong>'
+        f'<span>{html.escape(g.get("text", ""))}</span></figcaption></figure>'
+        for g in c.get("gallery", []) if g.get("image"))
+    coming = ""
+    if c.get("coming_intro") or gallery:
+        coming = f"""<section class="panel" id="coming">
+<h2>{esc('coming_title', 'What’s coming')}</h2>
+{paragraphs(c.get('coming_intro', ''))}
+<div class="gallery">
+{gallery}
+</div>
+</section>"""
+    # "Get HVE Studio updates": posts to the gateway's /signup, which keeps
+    # the list (gateway/main.py). "website" is a field people never see and
+    # bots fill; the gateway drops any sign-up that has it.
+    signup = ""
+    if c.get("signup_intro"):
+        signup = f"""<section class="panel" id="updates">
+<h2>{esc('signup_title', 'Get updates')}</h2>
+{paragraphs(c.get('signup_intro', ''))}
+<form class="signup" action="{HVE_BASE}/signup" method="post">
+  <input type="text" name="name" placeholder="Name" aria-label="Name" maxlength="120" autocomplete="name">
+  <input type="email" name="email" placeholder="Email" aria-label="Email" required maxlength="254" autocomplete="email">
+  <input type="text" name="company" placeholder="Company" aria-label="Company" maxlength="160" autocomplete="organization">
+  <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+  <label><input type="checkbox" name="current_hve_user" value="1"> I’m a current HVE user</label>
+  <button type="submit">Sign me up</button>
+</form>
+<p class="sub">{esc('signup_note')}</p>
+</section>"""
+    # Before release the page leads with what is coming; after, with Download.
+    if release or not coming:
+        hero_cta = ('<a class="btn" href="#download">Download</a>\n      '
+                    + ('<a class="btn ghost" href="#updates">Get updates</a>' if signup
+                       else '<a class="btn ghost" href="#licensing">Licensing</a>'))
+    else:
+        hero_cta = ('<a class="btn" href="#coming">See what’s coming</a>\n      '
+                    + ('<a class="btn ghost" href="#updates">Get updates</a>' if signup
+                       else '<a class="btn ghost" href="#download">Download</a>'))
+    nav_extra = (('<a href="#coming">What’s coming</a>' if coming else '')
+                 + ('<a href="#updates">Updates</a>' if signup else ''))
+
     features = "\n".join(f"<li>{html.escape(f)}</li>" for f in c.get("features", []))
     requirements = "\n".join(f"<li>{html.escape(r)}</li>" for r in c.get("requirements", []))
     faq = "\n".join(f"<h3>{html.escape(q.get('q', ''))}</h3>\n{paragraphs(q.get('a', ''))}"
@@ -1073,7 +1120,7 @@ def render_hve_page(c, release, downloads):
 <body>
 <nav class="topnav">
   <a href="https://www.edccorp.com">&larr; Back to edccorp.com</a>
-  <span class="links"><a href="#download">Download</a><a href="#licensing">Licensing</a><a
+  <span class="links">{nav_extra}<a href="#download">Download</a><a href="#licensing">Licensing</a><a
   href="#support">Support</a><a href="{PAGES_BASE}/">EDC Blender Extensions</a></span>
 </nav>
 
@@ -1085,8 +1132,7 @@ def render_hve_page(c, release, downloads):
     <p class="rise d1"><span class="badge">{badge}</span></p>
     <p class="lede rise d2">{esc('tagline')}</p>
     <div class="cta rise d3">
-      <a class="btn" href="#download">Download</a>
-      <a class="btn ghost" href="#licensing">Licensing</a>
+      {hero_cta}
     </div>
   </div>
 </header>
@@ -1095,6 +1141,10 @@ def render_hve_page(c, release, downloads):
 <section class="panel intro rise d4">
 {paragraphs(c.get('pitch', ''))}
 </section>
+
+{coming}
+
+{signup}
 
 <section class="panel" id="download">
 <h2>Download</h2>
@@ -1248,6 +1298,25 @@ footer .mark svg { height:40px; width:auto; }
 @keyframes rise { to { opacity:1; transform:none; } }
 @media (prefers-reduced-motion:reduce) { .rise { animation:none; opacity:1; transform:none; } .btn { transition:none; } }
 a:focus-visible, .btn:focus-visible { outline:2px solid var(--accent-ink); outline-offset:3px; border-radius:8px; }
+
+/* What's coming: a picture each */
+.gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+           gap: 1rem; margin-top: 1rem; }
+.shot { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+        overflow: hidden; display: flex; flex-direction: column; }
+.shot img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; display: block; }
+.shot figcaption { padding: .7rem .9rem .9rem; font-size: .9rem; line-height: 1.4; }
+.shot figcaption strong { display: block; font-size: 1rem; margin-bottom: .2rem; }
+.shot figcaption span { opacity: .8; }
+/* Get HVE Studio updates */
+.signup { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: .8rem; align-items: center; }
+.signup input[type=email], .signup input[type=text] { flex: 1 1 200px; padding: .6rem .8rem;
+        border: 1px solid var(--muted); border-radius: 8px; font: inherit;
+        background: var(--bg); color: var(--ink); }
+.signup .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.signup label { flex-basis: 100%; font-size: .9rem; opacity: .85; }
+.signup button { background: var(--accent); color: #fff; border: 0; border-radius: 8px;
+        padding: .65rem 1.2rem; font: inherit; font-weight: 600; cursor: pointer; }
 """
 
 def write_hve_site(out_dir):

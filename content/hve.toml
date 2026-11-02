@@ -16,17 +16,32 @@ It installs beside classic HVE rather than over it, so you can run both while yo
 
 # Shown under "Capabilities", a check mark each.
 features = [
-  "SIMON 3-D vehicle simulation, with DyMESH collision",
-  "EDCRASH damage-based reconstruction",
-  "EDSMAC and EDSMAC4 collision simulation",
-  "EDSVS, EDVSM, EDVTS and EDVDS vehicle and articulated-vehicle models",
-  "EDHIS and GATB occupant and pedestrian simulation",
-  "EDGEN, and a single-track model for motorcycles",
+  "SIMON 3-D vehicle simulation, with DyMESH collision and the TMeasy combined-slip tire model",
+  "Occupants in SIMON that ride through the crash and meet the vehicle's interior",
+  "GATB occupant and pedestrian simulation, with walking pedestrians and airbags",
+  "Motorcycles: nonlinear single-track dynamics and impacts, with a separate rider",
+  "EDCRASH damage-based reconstruction; EDSMAC and EDSMAC4 collision simulation",
+  "EDSVS, EDVSM, EDVTS, EDVDS and EDGEN vehicle and articulated-vehicle models",
+  "Real sites: search an address and pull in USGS aerial imagery and 3-D terrain",
+  "Survey point clouds (LAS, LAZ, PLY, E57 and Gaussian splats), and drivable surfaces built from a scan",
+  "Photorealistic images: sun shadows, night lighting with vehicle lamps, real skies and node-based materials",
+  "Animated cameras, a crush heat map, and tire and impact forces and vehicle paths in the 3-D view",
+  "EDR positioning, Monte Carlo analysis, Quick Case and a VIN-based Vehicle Package",
   "Opens classic HVE cases (File → Import)",
   "Graphs, report pages and timestep tables from every run",
-  "Animation recording up to 1000 fps, including slow motion",
-  "glTF export and a live link to Blender",
+  "Animation recording up to 1000 fps, including slow motion; glTF export and a live link to Blender",
 ]
+
+# "What's coming": a paragraph, then a picture each from content/assets.
+# Leave coming_intro empty and delete the [[gallery]] entries to hide it.
+coming_title = "What’s coming in HVE Studio"
+coming_intro = "HVE Studio is coming soon. We plan to release it well before the 2027 HVE Forum, which will be the first training on HVE Studio. Here’s a look at what’s new."
+
+# "Get HVE Studio updates": the form posts to the gateway's /signup. Leave
+# signup_intro empty to hide the section.
+signup_title = "Get HVE Studio updates"
+signup_intro = "Sign up to hear about HVE Studio as it’s ready. Current HVE users: tick the box, and we’ll invite you when the beta opens."
+signup_note = "We use your address only for HVE Studio news, and every email has a link to leave the list."
 
 # Shown under "Licensing". Paragraphs separated by a blank line.
 licensing = """HVE is licensed per computer. Activate it once from Help → License with your EDC Software key; it refreshes itself online, and keeps working for 60 days without an internet connection. A computer that never connects can be activated with a license file from the offline page.
@@ -59,3 +74,51 @@ a = "It is a licensed product, so it is not in the installer. Customers licensed
 [[faq]]
 q = "Can I check the download?"
 a = "Yes. Every release lists the SHA-256 of each of its files, beside the downloads."
+
+# The "What’s coming" pictures (kept last: TOML would otherwise read
+# every key after the first [[gallery]] as part of it).
+
+[[gallery]]
+image = "hve-studio-hero-street.jpg"
+title = "Photorealistic images"
+text = "Real sunlight, shadows and reflections, rendered straight from your case."
+
+[[gallery]]
+image = "hve-studio-night.jpg"
+title = "Night lighting"
+text = "Each vehicle lights the road with its own headlamps and tail lamps."
+
+[[gallery]]
+image = "hve-studio-usgs.jpg"
+title = "Real sites"
+text = "Search an address and pull in USGS aerial imagery and 3-D terrain."
+
+[[gallery]]
+image = "hve-studio-pointcloud.jpg"
+title = "Point clouds"
+text = "Bring laser scans of the scene in: streets, buildings and terrain."
+
+[[gallery]]
+image = "hve-studio-pedestrian.jpg"
+title = "Walking pedestrians"
+text = "A pedestrian walks with a measured gait right up to the impact."
+
+[[gallery]]
+image = "hve-studio-airbag.jpg"
+title = "Airbags"
+text = "Airbags that deploy and catch the occupant."
+
+[[gallery]]
+image = "hve-studio-motorcycle.jpg"
+title = "Motorcycle impacts"
+text = "Motorcycle dynamics and impacts, with a separate rider."
+
+[[gallery]]
+image = "hve-studio-forces.jpg"
+title = "See the forces"
+text = "Tire and impact forces, drawn right on the vehicles."
+
+[[gallery]]
+image = "hve-studio-crush.jpg"
+title = "Crush heat map"
+text = "See at a glance where each vehicle was crushed, and how deeply."

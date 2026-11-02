@@ -17,6 +17,8 @@ and download; this app validates it and serves:
     POST /v1/deactivate    HVE: release a computer's seat
     GET /v1/machines       HVE: the license's activated computers
     GET|POST /offline      HVE: offline activation and seat release, in a browser
+    POST /signup           HVE Studio update list: the hve.edccorp.com form
+    GET /signup/unsubscribe  leave that list (the link in every message)
                            (all four take the secret as a Bearer token;
                            licensing.py holds the rules)
 
@@ -38,6 +40,11 @@ Environment variables:
                      editing the file, no redeploy. Entries there override
                      CUSTOMER_TOKENS, which remains as a bootstrap/fallback.
     CUSTOMERS_PATH   path of the file in CUSTOMERS_REPO (default customers.json)
+    SIGNUPS_PATH     path in CUSTOMERS_REPO of the HVE Studio update list that
+                     POST /signup keeps (default hve-signups.json); written
+                     with ADMIN_GH_TOKEN, like the customer file
+    SIGNUP_NOTIFY    optional address told of each new sign-up (comma-separated
+                     for several)
     CUSTOMERS_TTL    customer-list cache seconds (default 60)
     ADMIN_API_TOKEN  enables POST /admin/customers (used by the purchase
                      automation, e.g. Power Automate) when set; callers
@@ -77,6 +84,7 @@ import hmac
 import html
 import json
 import os
+import re
 import secrets
 import time
 from datetime import date, datetime, timedelta, timezone
@@ -97,6 +105,8 @@ CACHE_TTL = int(os.environ.get("CACHE_TTL", "300"))
 CUSTOMERS_REPO = os.environ.get("CUSTOMERS_REPO", "")
 CUSTOMERS_PATH = os.environ.get("CUSTOMERS_PATH", "customers.json")
 CUSTOMERS_TTL = int(os.environ.get("CUSTOMERS_TTL", "60"))
+SIGNUPS_PATH = os.environ.get("SIGNUPS_PATH", "hve-signups.json")
+SIGNUP_NOTIFY = [a.strip() for a in os.environ.get("SIGNUP_NOTIFY", "").split(",") if a.strip()]
 ADMIN_API_TOKEN = os.environ.get("ADMIN_API_TOKEN", "")
 ADMIN_GH_TOKEN = os.environ.get("ADMIN_GH_TOKEN", "")
 STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
@@ -376,9 +386,11 @@ async def _origin_get(path: str) -> bytes:
     return resp.content
 
 
-async def _customers_file_request(method: str, payload: dict | None = None) -> httpx.Response:
-    """Read or write the customer file in CUSTOMERS_REPO via the contents API."""
-    url = f"https://api.github.com/repos/{CUSTOMERS_REPO}/contents/{CUSTOMERS_PATH}"
+async def _customers_file_request(method: str, payload: dict | None = None,
+                                  path: str | None = None) -> httpx.Response:
+    """Read or write a file in CUSTOMERS_REPO via the contents API: the
+    customer file by default, or another (the HVE Studio sign-ups)."""
+    url = f"https://api.github.com/repos/{CUSTOMERS_REPO}/contents/{path or CUSTOMERS_PATH}"
     headers = {
         "Accept": "application/vnd.github+json",
         "Authorization": f"Bearer {ADMIN_GH_TOKEN}",
@@ -2013,6 +2025,200 @@ async def hve_page():
     """HVE's landing page and downloads, on any host (hve.edccorp.com's "/")."""
     page = await _origin_get("hve.html")
     return Response(content=page, media_type="text/html")
+
+
+# ------------------------------------------------------- HVE Studio sign-up
+#
+# The form on hve.edccorp.com: people who want HVE Studio news, and -- with
+# the "current HVE user" box ticked -- the list the beta invitation goes to.
+#
+# Kept as a JSON file beside the customer list (SIGNUPS_PATH in
+# CUSTOMERS_REPO), keyed by lowercased address, so a second sign-up updates
+# the first rather than adding a duplicate. Nothing about it is secret, but
+# it is personal data, which is why it lives in the private repository and
+# not on the public site.
+#
+# Three things keep the list clean without a CAPTCHA: a hidden field a person
+# never fills ("website"), a per-address and per-caller rate limit, and an
+# answer that is the same whether the address was new, already there, or
+# dropped as spam -- so the form cannot be used to ask who is on the list.
+
+SIGNUP_LIMITS = {"addr": (3600.0, 3), "caller": (600.0, 10)}
+_SIGNUP_HITS: dict = {}
+_EMAIL_SHAPE = re.compile(r"^[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+$")
+
+
+def _signup_limited(kind: str, key: str) -> bool:
+    window, most = SIGNUP_LIMITS[kind]
+    now = time.monotonic()
+    hits = [t for t in _SIGNUP_HITS.get((kind, key), []) if now - t < window]
+    over = len(hits) >= most
+    if not over:
+        hits.append(now)
+    _SIGNUP_HITS[(kind, key)] = hits
+    return over
+
+
+def _signup_page(heading: str, message: str, status: int = 200) -> HTMLResponse:
+    return HTMLResponse(f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>HVE Studio updates — Engineering Dynamics Company</title>
+<style>
+  :root {{ color-scheme: light dark;
+    --bg: #f6f7f9; --card: #ffffff; --ink: #1c2530; --muted: #5b6773;
+    --accent: #6b2440; --border: #e2e6ea; }}
+  @media (prefers-color-scheme: dark) {{
+    :root {{ --bg: #10151b; --card: #1a2129; --ink: #e8edf2;
+      --muted: #9aa7b2; --accent: #d98aa0; --border: #2a333d; }} }}
+  body {{ margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.6 system-ui, "Segoe UI", sans-serif; }}
+  main {{ max-width: 34rem; margin: 3rem auto; padding: 0 1.25rem; }}
+  .card {{ background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 2rem; }}
+  h1 {{ margin: 0 0 .5rem; font-size: 1.4rem; }}
+  .muted {{ color: var(--muted); }}
+  a {{ color: var(--accent); }}
+</style></head><body><main><div class="card">
+<h1>{html.escape(heading)}</h1>
+<p class="muted">{html.escape(message)}</p>
+<p><a href="/">&larr; Back to HVE Studio</a></p>
+</div></main></body></html>""", status_code=status)
+
+
+def _signup_confirmation(name: str, unsubscribe_url: str) -> str:
+    return (f"Hello {name or 'there'},\n\n"
+            "Thanks for signing up for HVE Studio updates. We will let you know "
+            "as HVE Studio gets closer to release, and when the beta opens if "
+            "you told us you use HVE today.\n\n"
+            "If you did not sign up, or no longer want these emails, leave the "
+            f"list here:\n{unsubscribe_url}\n\n"
+            "Engineering Dynamics Company\nhttps://hve.edccorp.com\n")
+
+
+async def _save_signup(entry_email: str, fields: dict) -> tuple[bool, str]:
+    """Add or update one sign-up. Returns (new, unsubscribe id)."""
+    for attempt in (1, 2, 3):
+        resp = await _customers_file_request("GET", path=SIGNUPS_PATH)
+        if resp.status_code == 200:
+            payload = resp.json()
+            signups = json.loads(base64.b64decode(payload["content"]))
+            sha = payload.get("sha")
+        elif resp.status_code == 404:
+            signups, sha = {}, None
+        else:
+            raise HTTPException(status_code=502,
+                                detail=f"GitHub returned {resp.status_code} reading the sign-ups")
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        existing = signups.get(entry_email)
+        new = not isinstance(existing, dict)
+        entry = {} if new else existing
+        entry.update({k: v for k, v in fields.items() if v not in ("", None)})
+        entry["current_hve_user"] = bool(fields.get("current_hve_user")) or bool(entry.get("current_hve_user"))
+        entry.setdefault("signed_up", now)
+        entry["updated"] = now
+        entry.setdefault("unsubscribe_id", secrets.token_urlsafe(16))
+        entry.pop("unsubscribed", None)       # signing up again re-joins
+        signups[entry_email] = entry
+        body = {
+            "message": f"HVE Studio sign-up: {'new' if new else 'updated'}",
+            "content": base64.b64encode(
+                (json.dumps(signups, indent=2, sort_keys=True) + "\n").encode()).decode(),
+        }
+        if sha:
+            body["sha"] = sha
+        put = await _customers_file_request("PUT", body, path=SIGNUPS_PATH)
+        if put.status_code in (200, 201):
+            return new, entry["unsubscribe_id"]
+        if put.status_code != 409 or attempt == 3:
+            raise HTTPException(status_code=502,
+                                detail=f"GitHub returned {put.status_code} writing the sign-ups")
+    raise HTTPException(status_code=502, detail="sign-ups changed concurrently")
+
+
+@app.post("/signup")
+async def hve_signup(request: Request):
+    """The hve.edccorp.com "Get HVE Studio updates" form."""
+    from urllib.parse import parse_qs
+
+    raw = (await request.body())[:8192].decode("utf-8", "replace")
+    form = {k: v[0].strip() for k, v in parse_qs(raw).items()}
+    thanks = _signup_page(
+        "Thanks for signing up",
+        "You are on the HVE Studio update list. A confirmation email is on its "
+        "way; if it does not arrive, check spam.")
+
+    if form.get("website"):                   # the hidden field: a bot filled it
+        print("[gateway] signup: hidden field filled, dropped")
+        return thanks
+    email = form.get("email", "").lower()[:254]
+    if not _EMAIL_SHAPE.match(email):
+        return _signup_page("Please check your email address",
+                            "That does not look like an email address. Go back and try again.",
+                            status=400)
+    if _signup_limited("caller", _client_address(request)) or _signup_limited("addr", email):
+        return thanks
+    if not (CUSTOMERS_REPO and ADMIN_GH_TOKEN):
+        print("[gateway] signup: CUSTOMERS_REPO / ADMIN_GH_TOKEN not set; not saved")
+        return _signup_page(
+            "Sign-up is not available right now",
+            "We could not save your sign-up. Please email Engineering Dynamics "
+            "Company and we will add you.", status=503)
+
+    fields = {
+        "name": form.get("name", "")[:120],
+        "company": form.get("company", "")[:160],
+        "current_hve_user": form.get("current_hve_user") in ("1", "on", "yes", "true"),
+        "source": "hve.edccorp.com",
+    }
+    new, unsub_id = await _save_signup(email, fields)
+    print(f"[gateway] signup: {'new' if new else 'updated'} <{email}>"
+          f"{' (current HVE user)' if fields['current_hve_user'] else ''}")
+    if new:
+        host = request.headers.get("host", "hve.edccorp.com").split(":")[0]
+        unsub = f"https://{host}/signup/unsubscribe?id={unsub_id}"
+        await mail.send(email, "You're on the HVE Studio update list",
+                        _signup_confirmation(fields["name"], unsub))
+        for to in SIGNUP_NOTIFY:
+            await mail.send(to, f"HVE Studio sign-up: {fields['name'] or email}",
+                            f"{fields['name']} <{email}>\nCompany: {fields['company']}\n"
+                            f"Current HVE user: {'yes' if fields['current_hve_user'] else 'no'}\n")
+    return thanks
+
+
+@app.get("/signup/unsubscribe")
+async def hve_unsubscribe(id: str = ""):
+    """Leave the HVE Studio update list. The id is the one in the email."""
+    done = _signup_page("You have left the list",
+                        "You will not get any more HVE Studio update emails.")
+    if not id or not (CUSTOMERS_REPO and ADMIN_GH_TOKEN):
+        return done
+    for attempt in (1, 2, 3):
+        resp = await _customers_file_request("GET", path=SIGNUPS_PATH)
+        if resp.status_code != 200:
+            return done
+        payload = resp.json()
+        signups = json.loads(base64.b64decode(payload["content"]))
+        match = next((k for k, v in signups.items()
+                      if isinstance(v, dict) and hmac.compare_digest(str(v.get("unsubscribe_id", "")), id)), None)
+        if match is None or signups[match].get("unsubscribed"):
+            return done
+        signups[match]["unsubscribed"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        put = await _customers_file_request("PUT", {
+            "message": "HVE Studio sign-up: unsubscribed",
+            "content": base64.b64encode(
+                (json.dumps(signups, indent=2, sort_keys=True) + "\n").encode()).decode(),
+            "sha": payload.get("sha")}, path=SIGNUPS_PATH)
+        if put.status_code in (200, 201):
+            print(f"[gateway] signup: unsubscribed <{match}>")
+            return done
+        if put.status_code != 409:
+            break
+    print("[gateway] signup: unsubscribe could not be saved")
+    return _signup_page("Something went wrong",
+                        "We could not save that just now. Please try the link again, "
+                        "or email Engineering Dynamics Company.", status=502)
 
 
 @app.get("/software")

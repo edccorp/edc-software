@@ -498,3 +498,33 @@ customer environment variables may have been read; no HVE build after
 example `hve,simon,edsmac4`. A buyer starts with one seat. To change seats or
 make a site license, edit `seats` / `license_type` on the entry for now.
 Invoice payments (check, ACH, purchase order) are not handled yet.
+
+## The HVE Studio update list (hve.edccorp.com sign-up)
+
+The "Get HVE Studio updates" form on the HVE page posts to `POST /signup`.
+Each sign-up is kept in a JSON file beside the customer list, in the private
+`CUSTOMERS_REPO`, written with `ADMIN_GH_TOKEN` like the customer file —
+so no new service and no new secret. The file is keyed by the address in
+lower case; signing up again updates the entry. Each entry holds the name,
+company, `current_hve_user` (the box for the beta list), `signed_up`,
+`updated`, `source`, and `unsubscribe_id`; an address that left the list
+carries `unsubscribed` with the date.
+
+A new address gets a confirmation email through Resend (above) with its
+link to leave, `GET /signup/unsubscribe?id=…`. With Resend off the sign-up is
+still saved; only the email waits.
+
+| Variable | Example | Notes |
+|---|---|---|
+| `SIGNUPS_PATH` | `hve-signups.json` | the default; the file is created on the first sign-up |
+| `SIGNUP_NOTIFY` | `sales@edccorp.com` | optional; told of each new sign-up (comma-separate several) |
+
+Without `CUSTOMERS_REPO` and `ADMIN_GH_TOKEN` nothing is saved and the page
+says sign-up is unavailable rather than thanking someone whose address was
+lost. Bots are kept out by a hidden field and a rate limit (three sign-ups an
+hour per address, ten per ten minutes per caller), and the answer is the same
+whether an address was new, already listed or dropped, so the form cannot be
+used to find out who is on the list.
+
+To mail the list, send only to entries without `unsubscribed`, and put each
+entry's own unsubscribe link in the message.
