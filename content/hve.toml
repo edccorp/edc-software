@@ -18,7 +18,7 @@ It installs beside classic HVE rather than over it, so you can run both while yo
 features = [
   "SIMON 3-D vehicle simulation, with DyMESH collision and the TMeasy combined-slip tire model",
   "Occupants in SIMON that ride through the crash and meet the vehicle's interior",
-  "GATB occupant and pedestrian simulation, with walking pedestrians and airbags",
+  "GATB occupant and pedestrian simulation, with walking pedestrians",
   "Motorcycles: nonlinear single-track dynamics and impacts, with a separate rider",
   "EDCRASH damage-based reconstruction; EDSMAC and EDSMAC4 collision simulation",
   "EDSVS, EDVSM, EDVTS, EDVDS and EDGEN vehicle and articulated-vehicle models",
@@ -104,9 +104,9 @@ title = "Walking pedestrians"
 text = "A pedestrian walks with a measured gait right up to the impact."
 
 [[gallery]]
-image = "hve-studio-airbag.jpg"
-title = "Airbags"
-text = "Airbags that deploy and catch the occupant."
+image = "hve-studio-occupant.jpg"
+title = "Occupant motion"
+text = "Belted occupants ride through the crash and meet the vehicle's interior."
 
 [[gallery]]
 image = "hve-studio-motorcycle.jpg"
