@@ -79,14 +79,14 @@ a = "Yes. Every release lists the SHA-256 of each of its files, beside the downl
 # every key after the first [[gallery]] as part of it).
 
 [[gallery]]
-image = "hve-studio-hero-street.jpg"
-title = "Photorealistic images"
-text = "Real sunlight, shadows and reflections, rendered straight from your case."
-
-[[gallery]]
 image = "hve-studio-night.jpg"
 title = "Night lighting"
 text = "Each vehicle lights the road with its own headlamps and tail lamps."
+
+[[gallery]]
+image = "hve-studio-hero-street.jpg"
+title = "Photorealistic images"
+text = "Real sunlight, shadows and reflections, rendered straight from your case."
 
 [[gallery]]
 image = "hve-studio-usgs.jpg"
