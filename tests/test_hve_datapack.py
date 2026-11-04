@@ -71,10 +71,18 @@ def gw(monkeypatch):
 
     monkeypatch.setattr(main, "_customer_tokens", tokens)
     monkeypatch.setattr(main, "_datapacks", packs)
+    # No signed update-list.sig published: the gateway's own list (the
+    # transition path). The signed-file tests below set one.
+    signed = {"doc": None}
+
+    async def signed_list():
+        return signed["doc"]
+
+    monkeypatch.setattr(main, "_signed_update_list", signed_list)
     monkeypatch.setattr(main, "_stream_release_asset", stream)
     main._LICENSE_HITS.clear()
     client = TestClient(main.app, base_url="http://license.edccorp.com")
-    client.streamed, client.key, client.main = streamed, key, main
+    client.streamed, client.key, client.main, client.signed = streamed, key, main, signed
     return client
 
 
@@ -173,3 +181,87 @@ def test_a_data_release_never_becomes_the_program_on_the_page(monkeypatch):
     data = {"tag_name": "data-2026.10", "draft": False, "prerelease": False, "assets": []}
     monkeypatch.setattr(build_index, "_fetch", lambda url, **_: json.dumps([data, program]).encode())
     assert build_index._newest_release("edccorp/hve-next")["tag_name"] == "v1.0.0-alpha.2"
+
+
+# ---------------------------------------------------------------- the signed list
+# EDC signs update-list.sig on its own computer (hve-next scripts/sign_update_list.py)
+# and attaches it to the newest data release; the gateway serves it as it is.
+
+SIGNED = "eyJ2IjoxfQ.c2lnbmF0dXJl"   # base64url('{"v":1}') "." base64url('signature')
+
+
+def test_the_signed_list_is_served_as_it_is_with_the_data_flag(gw, monkeypatch):
+    gw.signed["doc"] = SIGNED
+    monkeypatch.setattr(gw.main, "UPDATE_KEY", None)      # the update key is on no server
+    r = gw.get("/v1/updates", headers={"authorization": "Bearer edc_full", **IP})
+    assert r.status_code == 200 and r.json() == {"updates": SIGNED, "data": True}
+    for key in ("edc_no_data", "edc_lapsed"):
+        r = gw.get("/v1/updates", headers={"authorization": f"Bearer {key}", **IP})
+        assert r.status_code == 200 and r.json() == {"updates": SIGNED, "data": False}, key
+
+
+def test_the_signed_list_still_refuses_a_key_without_hve(gw):
+    gw.signed["doc"] = SIGNED
+    r = gw.get("/v1/updates", headers={"authorization": "Bearer edc_blender", **IP})
+    assert r.status_code == 403 and r.json()["detail"]["code"] == "no_hve"
+    r = gw.get("/v1/updates", headers={"authorization": "Bearer edc_nobody", **IP})
+    assert r.status_code == 401
+
+
+def _github(monkeypatch, main, releases, assets):
+    """A fake GitHub: the release list, and each asset's bytes by id."""
+    calls = []
+
+    class Resp:
+        def __init__(self, status, payload=None, text=""):
+            self.status_code, self._payload, self.text = status, payload, text
+
+        def json(self):
+            return self._payload
+
+    class Client:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def get(self, url, headers=None):
+            calls.append(url)
+            if url.endswith("/releases?per_page=30"):
+                return Resp(200, releases)
+            aid = int(url.rsplit("/", 1)[1])
+            return Resp(200, text=assets[aid]) if aid in assets else Resp(404)
+
+    monkeypatch.setattr(main.httpx, "AsyncClient", Client)
+    return calls
+
+
+def test_the_signed_list_comes_from_the_newest_published_data_release(monkeypatch):
+    main = _load_main()
+    releases = [
+        {"tag_name": "v1.0.0-alpha.6", "draft": False, "assets": [{"name": "update-list.sig", "id": 9}]},
+        {"tag_name": "data-2026.12", "draft": True, "assets": [{"name": "update-list.sig", "id": 12}]},
+        {"tag_name": "data-2026.10", "draft": False, "assets": [{"name": "update-list.sig", "id": 10}]},
+        {"tag_name": "data-2026.11", "draft": False, "assets": [{"name": "update-list.sig", "id": 11}]},
+        {"tag_name": "data-2026.9", "draft": False, "assets": [{"name": "EDCVehicles-2026.9.zip", "id": 8}]},
+    ]
+    calls = _github(monkeypatch, main, releases, {9: "x.y", 10: "b2xk.c2ln", 11: "bmV3.c2ln\n", 12: "ZHJhZnQ.c2ln"})
+    doc = asyncio.run(main._signed_update_list())
+    assert doc == "bmV3.c2ln"                                  # data-2026.11: newest published, trailing newline gone
+    assert asyncio.run(main._signed_update_list()) == doc      # cached: GitHub asked once
+    assert len(calls) == 2
+
+
+def test_no_signed_list_or_a_malformed_one_is_none(monkeypatch):
+    main = _load_main()
+    _github(monkeypatch, main, [{"tag_name": "data-2026.10", "draft": False,
+                                 "assets": [{"name": "EDCVehicles-2026.10.zip", "id": 1}]}], {})
+    assert asyncio.run(main._signed_update_list()) is None
+    main = _load_main()
+    _github(monkeypatch, main, [{"tag_name": "data-2026.10", "draft": False,
+                                 "assets": [{"name": "update-list.sig", "id": 2}]}], {2: "<html>not a list</html>"})
+    assert asyncio.run(main._signed_update_list()) is None

@@ -447,8 +447,14 @@ out for ten minutes.
   private key never goes in a repository.
 - `LICENSE_KEY_ID`: the key's name, written into every license (default
   `2026b`). HVE accepts a license only under a name it knows.
-- `UPDATE_SIGNING_KEY` / `UPDATE_KEY_ID`: the same for the update list
-  (`hve-update-2026b.key`, default `upd-2026b`). Never the license key.
+- `UPDATE_SIGNING_KEY` / `UPDATE_KEY_ID`: **being retired; delete once
+  `update-list.sig` is published.** `/v1/updates` serves the update list EDC
+  signs on its own computer (hve-next `scripts/sign_update_list.py`, attached to
+  the newest `data-*` release as `update-list.sig`) exactly as it is, with an
+  unsigned `"data"` flag that withholds the packs from a secret without a
+  current `edcdb` grant. Only while no such file exists does the gateway sign a
+  data-pack-only list with this key, as it used to. The update key belongs on
+  no server: once the signed file is published, remove both variables.
 
 `/healthz` shows `license_signing.public_key` and `update_signing.public_key`,
 the first 16 hex of each public key's SHA-256. They must match the figures in
