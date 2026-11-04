@@ -1708,6 +1708,67 @@ async def _datapack_customer(request: Request, kind: str) -> dict:
     return customer
 
 
+# THE SIGNED UPDATE LIST (hve-next docs/DISTRIBUTION.md, "What the gateway has
+# to serve"; scripts/sign_update_list.py there). EDC signs the list -- every
+# published program release and data pack, and the license key in use -- on
+# its own computer with the update key, which is on no server, and attaches it
+# to the newest data release as update-list.sig. The gateway serves that file
+# as it is: it cannot change a signed list, so a breach here can forge no
+# update. The unsigned "data" flag beside it withholds the packs from a secret
+# without a current edcdb grant (it can only withhold an offer, never add one).
+UPDATE_LIST_ASSET = "update-list.sig"
+_update_list_cache = {"at": 0.0, "doc": None}
+
+
+def _looks_signed(doc: str) -> bool:
+    """base64url(json) "." base64url(signature): the license document's shape."""
+    parts = doc.split(".")
+    ok = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_")
+    return len(parts) == 2 and all(p and set(p) <= ok for p in parts)
+
+
+async def _signed_update_list() -> str | None:
+    """update-list.sig from the newest published data release, or None when
+    none carries one. Cached like the pack list."""
+    now = time.time()
+    if now - _update_list_cache["at"] < DATAPACK_TTL:
+        return _update_list_cache["doc"]
+    headers = {"Accept": "application/vnd.github+json"}
+    if GH_TOKEN:
+        headers["Authorization"] = f"Bearer {GH_TOKEN}"
+    doc = None
+    async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+        r = await client.get(f"https://api.github.com/repos/{HVE_DATA_REPO}/releases?per_page=30",
+                             headers=headers)
+        if r.status_code != 200:
+            raise HTTPException(status_code=502, detail={
+                "code": "no_update_list",
+                "message": "The update list could not be read. Try again later."})
+        newest = None
+        for rel in r.json():
+            version = _datapack_version(str(rel.get("tag_name", "")))
+            if not version or rel.get("draft"):
+                continue
+            asset = next((a for a in rel.get("assets", []) if a.get("name") == UPDATE_LIST_ASSET), None)
+            if not asset:
+                continue
+            key = [int(x) for x in version.split(".")]
+            if newest is None or key > newest[0]:
+                newest = (key, asset)
+        if newest is not None:
+            ar = await client.get(
+                f"https://api.github.com/repos/{HVE_DATA_REPO}/releases/assets/{newest[1]['id']}",
+                headers=dict(headers, Accept="application/octet-stream"))
+            text = ar.text.strip() if ar.status_code == 200 else ""
+            if _looks_signed(text):
+                doc = text
+            else:
+                print(f"[gateway] {UPDATE_LIST_ASSET}: not readable or not a signed list "
+                      f"(HTTP {ar.status_code}); not served")
+    _update_list_cache.update(at=now, doc=doc)
+    return doc
+
+
 def _may_have_data(customer: dict) -> bool:
     products = customer["products"]
     return DATAPACK_FEATURE in products and _active(products[DATAPACK_FEATURE])
@@ -1715,14 +1776,21 @@ def _may_have_data(customer: dict) -> bool:
 
 @app.get("/v1/updates")
 async def hve_updates(request: Request):
-    """The signed update list for this key: {"updates": "<document>"}.
-    Only data packs so far; the program's own releases are listed on
-    hve.edccorp.com."""
+    """The update list for this key: {"updates": "<signed document>", "data": bool}.
+
+    The document is EDC's signed update-list.sig, served as it is (program
+    releases and data packs; see _signed_update_list). Until one is published
+    -- and only while UPDATE_SIGNING_KEY is still set -- the gateway signs a
+    data-pack-only list itself, as it used to; delete that variable once the
+    signed file is in place, so the update key is on no server."""
+    customer = await _datapack_customer(request, "refresh")
+    signed = await _signed_update_list()
+    if signed is not None:
+        return {"updates": signed, "data": _may_have_data(customer)}
     if UPDATE_KEY is None:
         raise HTTPException(status_code=503, detail={
             "code": "not_configured",
-            "message": "Vehicle data updates are not available right now."})
-    customer = await _datapack_customer(request, "refresh")
+            "message": "Updates are not available right now."})
     data = []
     if _may_have_data(customer):
         # The pack is fetched from this same origin, which is the only place
