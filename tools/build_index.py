@@ -1045,7 +1045,11 @@ def render_hve_page(c, release, downloads):
             status += (f'<div class="notice"><strong>Test build.</strong> '
                        f'{html.escape(c["prerelease_note"])}</div>')
         notes = render_notes(release.get("body") or "")
-        whats_new = f'<h2>What’s new</h2>\n<div class="notes">{notes}</div>' if notes else ""
+        # id="whats-new": HVE Studio's update offer links here (hve-next
+        # scripts/sign_update_list.py, notes_url) -- the release on GitHub is
+        # in a private repository a customer cannot open.
+        whats_new = (f'<h2 id="whats-new">What’s new</h2>\n<div class="notes">{notes}</div>'
+                     if notes else "")
     else:
         status = ('<div class="notice"><strong>Downloads open at release.</strong> '
                   'HVE Studio is in testing; this page will offer it here as soon as it is '
