@@ -181,7 +181,7 @@ except ValueError as exc:
     FREE_TERM_ERROR = f"FREE_TERM_DAYS is not a number: {exc}"
     print(f"[gateway] ERROR: {FREE_TERM_ERROR}")
 # Display order (store rows, welcome-page listings).
-PRODUCT_IDS = ("cammatch", "point_cloud_toolkit", "recon_toolkit", "video_forensics_toolkit",
+PRODUCT_IDS = ("video_forensics_toolkit", "cammatch", "point_cloud_toolkit", "recon_toolkit",
                "hve_toolkit")
 PRODUCT_NAMES = {
     "cammatch": "CamMatch™",
