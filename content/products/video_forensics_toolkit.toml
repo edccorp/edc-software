@@ -95,17 +95,6 @@ what any block encoder would decide from this picture, not the choices this \
 encoder made, and exhibits should be labelled accordingly."""
 
 [[sections]]
-title = "Training & Certification (offered separately)"
-body = """The Video Forensics Toolkit™ course is self-paced: eleven narrated \
-video modules work through one recorded event with a known answer — two \
-cameras, the copies made of their recordings, and a vehicle's speed — \
-covering every tool in the toolkit. Each module ends with a knowledge check, \
-followed by a Final Assessment, a Practical Assessment on a new file, and an \
-official certificate on successful completion.
-
-Contact info@edccorp.com for enrollment."""
-
-[[sections]]
 title = "Built for professionals"
 body = """The Video Forensics Toolkit™ is designed for accident \
 reconstruction engineers, forensic engineers, engineering consultants, \
