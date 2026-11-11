@@ -4,15 +4,13 @@
 # tools/build_index.py, and the build skips the product page for hidden
 # products. Remove it from that set and this page starts rendering on the
 # next publish run.
-#
-# No price, hero image, gallery or sample report yet — add them before
-# launch. The renderer omits each of those sections when its key is absent,
-# so the page is coherent without them.
 
 name = "Video Forensics Toolkit™"
 tagline = "Recover What the Video Actually Recorded"
-badge = "Built for Blender • Powered by FFmpeg & OpenCV"
-blender_min = "4.2"
+badge = "Built for Blender • Powered by FFmpeg"
+price = "$399"
+blender_min = "5.0"
+hero_image = "video-forensics-toolkit-hero.jpg"
 
 pitch = """The Video Forensics Toolkit™ analyses video evidence inside \
 Blender, in the footage's own terms. It answers the question every \
@@ -21,29 +19,35 @@ happen? Much CCTV, DVR and phone footage is variable-rate, or pads a nominal \
 rate with duplicated frames, so assuming a constant frame rate silently \
 corrupts every calculation built on it. The toolkit recovers the real timing \
 from the file's own per-frame timestamps instead of trusting the container's \
-headline number, then builds its authenticity, structure and motion analyses \
-on that footing."""
+headline number, then builds its integrity, synchronization, measurement and \
+exhibit tools on that footing."""
 
 features = [
-    "Real frame timing from the file's own timestamps (PTS), not the container rate",
-    "Time map: the true elapsed time between any two frames",
-    "Duplicate-frame detection — the padding a DVR inserts to reach a nominal rate",
-    "Container and stream metadata, encoder signatures, SHA-256 for chain of custody",
-    "Timestamp OCR for burned-in clocks",
-    "Authenticity checks: interlacing, Error Level Analysis, sensor-noise consistency",
-    "PRNU camera fingerprinting and double-compression scoring",
-    "Codec and macroblock structure, with computed block analysis for any codec",
-    "Optical-flow field, scene cuts, active-picture detection, rolling-shutter measurement",
-    "Speed from tracked features and a distance measured in the scene",
-    "Frame-accurate excerpt export, exhibit videos, and a per-frame CSV ledger",
+    "Real frame timing from the file's own timestamps: stated, typical and average rates, gaps and dropped pictures",
+    "Time Map: the true elapsed time between any two frames, with a warning when a frame is a repeated copy",
+    "Duplicate-frame detection, and export of the real pictures, each stamped with its own time, with a time map",
+    "Metadata, encoder signatures and SHA-256 hashing for chain of custody",
+    "Timestamp OCR: reads a burned-in clock on every frame and reconciles it with the file's timestamps",
+    "Integrity checks: interlacing, 3:2 telecine, resampling, macroblock grid offset after a crop, double compression",
+    "Multi-camera sync: several cameras on one common time grid, with a review edit",
+    "Scene cuts and lighting changes, exposure timeline, active picture, smooth-region (redaction) map, excerpt matching, per-GOP bitrate",
+    "Speed from tracks by cross-ratio on the vehicle's own wheelbase, with the clip's lens taken out and real capture times",
+    "Evidence and viewing exports, motion-vector, macroblock and optical-flow exhibit videos, a per-frame ledger, and a PDF/HTML forensic report",
+]
+
+includes = [
+    "GPL software package for the Video Forensics Toolkit™",
+    "One year of authenticated repository access for downloads",
+    "Repository-delivered updates, bug fixes, improvements, and new releases during the access term",
+    "Repository secret associated with the purchaser email",
+    "Official documentation",
+    "Continued use of already-downloaded versions after repository access expires",
 ]
 
 requirements = [
-    "Blender 4.2 or newer",
-    "FFmpeg (ffprobe) on the system PATH — reads the coded stream's timing and structure",
-    "imageio with the FFmpeg backend — decodes individual frames for analysis",
-    "OpenCV — optical flow and feature tracking; installs from the panel on first run",
-    "Optional: Tesseract or EasyOCR, for reading burned-in timestamps",
+    "Blender 5.0 or newer",
+    "imageio and FFmpeg's ffprobe — install from the panel with Install Dependencies and Install FFprobe (Windows, macOS, Linux)",
+    "Optional: OpenCV for the optical-flow tools, and Tesseract for Timestamp OCR — each installs from its own panel",
 ]
 
 [[sections]]
@@ -63,16 +67,17 @@ the container claims."""
 
 [[sections]]
 title = "Measured, not assumed"
-body = """Speed From Tracks measures its own scale. Two tracked points a \
-known real distance apart give metres-per-pixel in the image, at those \
-points' own depth; the interval comes from the recovered timestamps. The \
-only figure typed in is the one distance somebody went and measured in the \
-scene, and the result is reported together with the scale and interval it \
-used, so the reading can be checked rather than believed.
+body = """Speed From Tracks needs no scene survey. Its cross-ratio mode \
+measures a vehicle's travel from two features on the vehicle itself — the \
+wheelbase, at the tyre contacts — seen at two instants, so perspective \
+cancels out. The lens set on the clip is taken out of every marker first, \
+and the interval comes from the recovered timestamps, never from a frame \
+count times a rate. The result is reported with its frames, interval, \
+dimension and uncertainty, so the reading can be checked rather than believed.
 
 Where an analysis cannot be trusted, it says so instead of producing a \
-number: a frame with no timestamp, a marker the tracker lost, or a subject \
-that changed depth over the interval each stop the measurement rather than \
+number: a frame with no timestamp, a marker the tracker lost, or a vehicle \
+too small in the frame to measure each stop the measurement rather than \
 substituting something plausible."""
 
 [[sections]]

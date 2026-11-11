@@ -77,7 +77,6 @@ PRERELEASE_PRODUCTS = {
 # listed here as "edc_visibility_toolkit" while every release since v1.16.0
 # has shipped as "visibility_toolkit", so it was advertised all along.
 HIDDEN_PRODUCTS = {
-    "video_forensics_toolkit",
     "audio_forensics_toolkit",
     "visibility_toolkit",
     "recon_calculations",
@@ -312,8 +311,8 @@ footer { margin-top: 3.5rem; padding-top: 1rem; border-top: 1px solid var(--bord
 
 FOOTER_HTML = """<footer>
 \u00a9 Engineering Dynamics Company. CamMatch\u2122, HVE Toolkit\u2122,
-Point Cloud Toolkit\u2122, and Recon Toolkit\u2122 are trademarks of
-Engineering Dynamics Company. Blender\u00ae is a registered trademark of the
+Point Cloud Toolkit\u2122, Recon Toolkit\u2122, and Video Forensics
+Toolkit\u2122 are trademarks of Engineering Dynamics Company. Blender\u00ae is a registered trademark of the
 Blender Foundation. The software is free software under the GNU GPL;
 see each product's repository and <a href="/access-and-licensing.html">Access
 and licensing</a> for details.
@@ -412,7 +411,7 @@ def _buy_actions(pid, price, big=False):
     return f'<a class="btn ghost" href="{STORE_URL}">See the store</a>'
 
 
-DISPLAY_ORDER = ["cammatch", "point_cloud_toolkit", "recon_toolkit", "hve_toolkit"]
+DISPLAY_ORDER = ["video_forensics_toolkit", "cammatch", "point_cloud_toolkit", "recon_toolkit", "hve_toolkit"]
 
 
 def render_landing_page(entries, content, support=None):
