@@ -165,7 +165,7 @@ FREE_PRODUCTS = [
 RESTRICTED_PRODUCTS = frozenset(
     p.strip() for p in os.environ.get(
         "RESTRICTED_PRODUCTS",
-        "video_forensics_toolkit,audio_forensics_toolkit,visibility_toolkit,"
+        "audio_forensics_toolkit,visibility_toolkit,"
         "recon_calculations,blendmotion,hve_testing",
     ).split(",") if p.strip()
 )
@@ -181,18 +181,21 @@ except ValueError as exc:
     FREE_TERM_ERROR = f"FREE_TERM_DAYS is not a number: {exc}"
     print(f"[gateway] ERROR: {FREE_TERM_ERROR}")
 # Display order (store rows, welcome-page listings).
-PRODUCT_IDS = ("cammatch", "point_cloud_toolkit", "recon_toolkit", "hve_toolkit")
+PRODUCT_IDS = ("cammatch", "point_cloud_toolkit", "recon_toolkit", "video_forensics_toolkit",
+               "hve_toolkit")
 PRODUCT_NAMES = {
     "cammatch": "CamMatch™",
     "hve_toolkit": "HVE Toolkit™",
     "point_cloud_toolkit": "Point Cloud Toolkit™",
     "recon_toolkit": "Recon Toolkit™",
+    "video_forensics_toolkit": "Video Forensics Toolkit™",
 }
 PRODUCT_TAGLINES = {
     "cammatch": "Camera matching from 2D-3D correspondences",
     "hve_toolkit": "Pre- and post-simulation tools for HVE",
     "point_cloud_toolkit": "Import, filter, and surface laser-scan point clouds",
     "recon_toolkit": "Data-driven animation and analysis for accident recon",
+    "video_forensics_toolkit": "True frame timing, integrity and speed from video",
 }
 
 _raw_tokens = os.environ.get("CUSTOMER_TOKENS", "{}")

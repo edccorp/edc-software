@@ -77,7 +77,6 @@ PRERELEASE_PRODUCTS = {
 # listed here as "edc_visibility_toolkit" while every release since v1.16.0
 # has shipped as "visibility_toolkit", so it was advertised all along.
 HIDDEN_PRODUCTS = {
-    "video_forensics_toolkit",
     "audio_forensics_toolkit",
     "visibility_toolkit",
     "recon_calculations",
